@@ -2,11 +2,11 @@ import express, { Application } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
-import mongoSanitize from 'express-mongo-sanitize';
 import { env } from './env';
 import { requestLogger } from '../middlewares/logging.middleware';
 import { globalErrorHandler, notFoundHandler } from '../middlewares/errorHandler.middleware';
 import { globalRateLimiter } from '../middlewares/rateLimiter.middleware';
+import { mongoSanitizeMiddleware } from '../middlewares/mongoSanitize.middleware';
 import { registerRoutes } from '../routes';
 
 export const createApp = (): Application => {
@@ -38,7 +38,7 @@ export const createApp = (): Application => {
   app.use(cookieParser());
 
   // Prevent MongoDB Operator Injection Attacks
-  app.use(mongoSanitize());
+  app.use(mongoSanitizeMiddleware);
 
   // Rate Limiting
   app.use(globalRateLimiter);

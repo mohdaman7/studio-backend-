@@ -1,18 +1,18 @@
-import mongoose, { Schema, Document, Types } from 'mongoose';
-
+// Role and permissions mappings
 export const SYSTEM_ROLES = {
   SUPER_ADMIN: 'super-admin',
   ADMIN: 'admin',
   MANAGER: 'manager',
-  CASHIER: 'cashier'
-};
+  CASHIER: 'cashier',
+  INVENTORY: 'inventory',
+} as const;
 
 export const PERMISSIONS = {
   USER_READ: 'user:read',
   USER_CREATE: 'user:create',
   USER_UPDATE: 'user:update',
   USER_DELETE: 'user:delete',
-  
+
   ROLE_READ: 'role:read',
   ROLE_CREATE: 'role:create',
   ROLE_UPDATE: 'role:update',
@@ -43,59 +43,26 @@ export const PERMISSIONS = {
   CUSTOMER_UPDATE: 'customer:update',
   CUSTOMER_DELETE: 'customer:delete',
 
-  PURCHASE_READ: 'purchases:read',
-  PURCHASE_CREATE: 'purchases:create',
-  PURCHASE_UPDATE: 'purchases:update',
-  PURCHASE_DELETE: 'purchases:delete',
+  PURCHASE_READ: 'purchase:read',
+  PURCHASE_CREATE: 'purchase:create',
 
   INVENTORY_READ: 'inventory:read',
-  INVENTORY_ADJUST: 'inventory:write',
+  INVENTORY_ADJUST: 'inventory:adjust',
 
-  SALE_READ: 'sales:read',
-  SALE_CREATE: 'sales:create',
-  SALE_UPDATE: 'sales:update',
-  SALE_DELETE: 'sales:delete',
+  SALE_READ: 'sale:read',
+  SALE_CREATE: 'sale:create',
 
   INVOICE_READ: 'invoice:read',
   INVOICE_CREATE: 'invoice:create',
 
   CREDIT_READ: 'credit:read',
   CREDIT_CREATE: 'credit:create',
-  CREDIT_WRITE: 'credit:write',
 
-  EXPENSE_READ: 'expenses:read',
-  EXPENSE_CREATE: 'expenses:create',
+  EXPENSE_READ: 'expense:read',
+  EXPENSE_CREATE: 'expense:create',
 
-  REPORT_READ: 'reports:read',
+  REPORT_READ: 'report:read',
   DASHBOARD_READ: 'dashboard:read',
   SETTINGS_READ: 'settings:read',
-  SETTINGS_WRITE: 'settings:write',
-  
-  AUDIT_READ: 'audit:read'
-};
-
-export interface IRole extends Document {
-  name: string;
-  slug: string;
-  permissions: string[];
-  isSystem: boolean;
-  isActive: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-const roleSchema = new Schema<IRole>(
-  {
-    name: { type: String, required: true, trim: true },
-    slug: { type: String, required: true, unique: true, lowercase: true, trim: true },
-    permissions: [{ type: String, required: true }],
-    isSystem: { type: Boolean, default: false },
-    isActive: { type: Boolean, default: true },
-  },
-  { timestamps: true }
-);
-
-roleSchema.index({ slug: 1 }, { unique: true });
-
-export const Role = mongoose.model<IRole>('Role', roleSchema);
-export default Role;
+  SETTINGS_UPDATE: 'settings:update',
+} as const;

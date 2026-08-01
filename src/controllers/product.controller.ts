@@ -5,6 +5,10 @@ import { ApiResponse } from '../utils/apiResponse';
 import { createProductSchema, updateProductSchema, stockAdjustmentSchema } from '../validators/product.validator';
 import { asyncHandler } from '../utils/asyncHandler';
 
+// Helpers to get parameters safely
+const getParamId = (req: Request): string => String(req.params.id || '');
+const getParamBarcode = (req: Request): string => String(req.params.barcode || '');
+
 // ─── Products ────────────────────────────────────────────────────────────────
 export const getProducts = asyncHandler(async (req: Request, res: Response) => {
   const result = await productService.getAll(req);
@@ -12,12 +16,14 @@ export const getProducts = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const getProductById = asyncHandler(async (req: Request, res: Response) => {
-  const item = await productService.getById(req.params.id);
+  const id = getParamId(req);
+  const item = await productService.getById(id);
   return ApiResponse.success(res, 'Product fetched successfully', item);
 });
 
 export const getProductByBarcode = asyncHandler(async (req: Request, res: Response) => {
-  const item = await productService.getByBarcode(req.params.barcode);
+  const barcode = getParamBarcode(req);
+  const item = await productService.getByBarcode(barcode);
   return ApiResponse.success(res, 'Product fetched successfully', item);
 });
 
@@ -29,13 +35,15 @@ export const createProduct = asyncHandler(async (req: Request, res: Response) =>
 });
 
 export const updateProduct = asyncHandler(async (req: Request, res: Response) => {
+  const id = getParamId(req);
   const validated = updateProductSchema.parse(req.body);
-  const item = await productService.update(req.params.id, validated);
+  const item = await productService.update(id, validated);
   return ApiResponse.success(res, 'Product updated successfully', item);
 });
 
 export const deleteProduct = asyncHandler(async (req: Request, res: Response) => {
-  await productService.delete(req.params.id);
+  const id = getParamId(req);
+  await productService.delete(id);
   return ApiResponse.success(res, 'Product deleted successfully');
 });
 
@@ -47,7 +55,8 @@ export const adjustStock = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const getStockHistory = asyncHandler(async (req: Request, res: Response) => {
-  const history = await productService.getStockHistory(req.params.id);
+  const id = getParamId(req);
+  const history = await productService.getStockHistory(id);
   return ApiResponse.success(res, 'Stock history fetched successfully', history);
 });
 
@@ -63,12 +72,14 @@ export const createCategory = asyncHandler(async (req: Request, res: Response) =
 });
 
 export const updateCategory = asyncHandler(async (req: Request, res: Response) => {
-  const item = await categoryService.update(req.params.id, req.body);
+  const id = getParamId(req);
+  const item = await categoryService.update(id, req.body);
   return ApiResponse.success(res, 'Category updated successfully', item);
 });
 
 export const deleteCategory = asyncHandler(async (req: Request, res: Response) => {
-  await categoryService.delete(req.params.id);
+  const id = getParamId(req);
+  await categoryService.delete(id);
   return ApiResponse.success(res, 'Category deleted successfully');
 });
 
@@ -84,12 +95,14 @@ export const createBrand = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const updateBrand = asyncHandler(async (req: Request, res: Response) => {
-  const item = await brandService.update(req.params.id, req.body);
+  const id = getParamId(req);
+  const item = await brandService.update(id, req.body);
   return ApiResponse.success(res, 'Brand updated successfully', item);
 });
 
 export const deleteBrand = asyncHandler(async (req: Request, res: Response) => {
-  await brandService.delete(req.params.id);
+  const id = getParamId(req);
+  await brandService.delete(id);
   return ApiResponse.success(res, 'Brand deleted successfully');
 });
 
@@ -105,12 +118,14 @@ export const createSupplier = asyncHandler(async (req: Request, res: Response) =
 });
 
 export const updateSupplier = asyncHandler(async (req: Request, res: Response) => {
-  const item = await supplierService.update(req.params.id, req.body);
+  const id = getParamId(req);
+  const item = await supplierService.update(id, req.body);
   return ApiResponse.success(res, 'Supplier updated successfully', item);
 });
 
 export const deleteSupplier = asyncHandler(async (req: Request, res: Response) => {
-  await supplierService.delete(req.params.id);
+  const id = getParamId(req);
+  await supplierService.delete(id);
   return ApiResponse.success(res, 'Supplier deleted successfully');
 });
 
@@ -126,11 +141,13 @@ export const createCustomer = asyncHandler(async (req: Request, res: Response) =
 });
 
 export const updateCustomer = asyncHandler(async (req: Request, res: Response) => {
-  const item = await customerService.update(req.params.id, req.body);
+  const id = getParamId(req);
+  const item = await customerService.update(id, req.body);
   return ApiResponse.success(res, 'Customer updated successfully', item);
 });
 
 export const deleteCustomer = asyncHandler(async (req: Request, res: Response) => {
-  await customerService.delete(req.params.id);
+  const id = getParamId(req);
+  await customerService.delete(id);
   return ApiResponse.success(res, 'Customer deleted successfully');
 });

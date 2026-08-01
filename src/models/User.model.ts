@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs';
 export interface IUser extends Document {
   _id: Types.ObjectId;
   companyId: Types.ObjectId;
-  branchId?: Types.ObjectId; // Empty denotes multi-branch/global admin access
+  branchId?: Types.ObjectId;
   name: string;
   email: string;
   password: string;
@@ -15,7 +15,7 @@ export interface IUser extends Document {
   verificationToken?: string;
   resetPasswordToken?: string;
   resetPasswordExpires?: Date;
-  refreshTokens: string[];
+  refreshTokens?: string[];
   lastLoginAt?: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -43,11 +43,15 @@ const userSchema = new Schema<IUser>(
 );
 
 // Encrypt Password
-userSchema.pre('save', async function (next) {
+userSchema.pre('save', async function (this: any, next: any) {
   if (!this.isModified('password')) return next();
-  const salt = await bcrypt.genSalt(12);
-  this.password = await bcrypt.hash(this.password, salt);
-  next();
+  try {
+    const salt = await bcrypt.genSalt(12);
+    this.password = await bcrypt.hash(this.password, salt);
+    next();
+  } catch (err) {
+    next(err);
+  }
 });
 
 // Compare Method
@@ -58,11 +62,11 @@ userSchema.methods.comparePassword = async function (candidatePassword: string):
 // Cleanup JSON serialisation
 userSchema.set('toJSON', {
   transform: (_doc, ret) => {
-    delete ret.password;
-    delete ret.refreshTokens;
-    delete ret.verificationToken;
-    delete ret.resetPasswordToken;
-    delete ret.resetPasswordExpires;
+    delete (ret as any).password;
+    delete (ret as any).refreshTokens;
+    delete (ret as any).verificationToken;
+    delete (ret as any).resetPasswordToken;
+    delete (ret as any).resetPasswordExpires;
     return ret;
   },
 });
@@ -73,3 +77,4 @@ userSchema.index({ companyId: 1, email: 1 });
 userSchema.index({ branchId: 1 });
 
 export const User = mongoose.model<IUser>('User', userSchema);
+export default User;

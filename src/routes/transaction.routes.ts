@@ -5,28 +5,33 @@ import { authorize } from '../middlewares/rbac.middleware';
 
 const router = Router();
 
+// All transaction routes require authentication
 router.use(authenticate);
 
-// Sales & POS
-router.post('/sales', authorize('sale:create'), transactionController.createSale);
-router.get('/sales', authorize('sale:read'), transactionController.getSales);
+// ─── Sales ────────────────────────────────────────────────────────────────────
+router.get('/sales', authorize('sales:read'), transactionController.getSales);
+router.post('/sales', authorize('sales:create'), transactionController.createSale);
+router.get('/sales/:id', authorize('sales:read'), transactionController.getSaleById);
+router.patch('/sales/:id/cancel', authorize('sales:delete'), transactionController.cancelSale);
 
-// Purchases
-router.post('/purchases', authorize('purchase:create'), transactionController.createPurchase);
-router.get('/purchases', authorize('purchase:read'), transactionController.getPurchases);
+// ─── Purchases ────────────────────────────────────────────────────────────────
+router.get('/purchases', authorize('purchases:read'), transactionController.getPurchases);
+router.post('/purchases', authorize('purchases:create'), transactionController.createPurchase);
 
-// Credit Sales
+// ─── Credit Sales ─────────────────────────────────────────────────────────────
 router.get('/credit-sales', authorize('credit:read'), transactionController.getCreditSales);
-router.post('/credit-sales/:id/payments', authorize('credit:create'), transactionController.recordCreditPayment);
+router.post('/credit-sales/:id/payment', authorize('credit:write'), transactionController.recordCreditPayment);
 
-// Expenses
-router.post('/expenses', authorize('expense:create'), transactionController.createExpense);
-router.get('/expenses', authorize('expense:read'), transactionController.getExpenses);
+// ─── Expenses ─────────────────────────────────────────────────────────────────
+router.get('/expenses', authorize('expenses:read'), transactionController.getExpenses);
+router.post('/expenses', authorize('expenses:create'), transactionController.createExpense);
 
-// Reports
-router.get('/reports/:type', authorize('report:read'), transactionController.getReports);
+// ─── Inventory ────────────────────────────────────────────────────────────────
+router.get('/inventory/ledger', authorize('inventory:read'), transactionController.getStockLedger);
+router.post('/inventory/adjust', authorize('inventory:write'), transactionController.adjustInventory);
 
-// Dashboard
-router.get('/dashboard', authorize('dashboard:read'), transactionController.getDashboardData);
+// ─── Dashboard & Reports ──────────────────────────────────────────────────────
+router.get('/dashboard', transactionController.getDashboardData);
+router.get('/reports/:type', authorize('reports:read'), transactionController.getReports);
 
 export default router;

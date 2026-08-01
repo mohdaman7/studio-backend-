@@ -6,7 +6,9 @@ export interface IExpense extends Document {
   title: string;
   amount: number;
   category: string;
+  date: Date;
   notes?: string;
+  paymentMethod: string;
   createdBy: Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
@@ -19,7 +21,9 @@ const expenseSchema = new Schema<IExpense>(
     title: { type: String, required: true, trim: true },
     amount: { type: Number, required: true, min: 0 },
     category: { type: String, required: true, trim: true },
+    date: { type: Date, default: Date.now },
     notes: { type: String },
+    paymentMethod: { type: String, default: 'cash' },
     createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   },
   { timestamps: true }

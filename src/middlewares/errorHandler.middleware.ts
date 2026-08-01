@@ -32,7 +32,7 @@ export const globalErrorHandler = (
     statusCode = 400;
     message = 'Validation errors occurred';
     code = 'VALIDATION_ERROR';
-    errors = err.errors.map((e) => ({
+    errors = err.issues.map((e: any) => ({
       field: e.path.join('.'),
       message: e.message,
     }));

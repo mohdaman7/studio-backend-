@@ -4,6 +4,11 @@ import { ApiResponse } from '../utils/apiResponse';
 import { createUserSchema, updateUserSchema } from '../validators/user.validator';
 import { asyncHandler } from '../utils/asyncHandler';
 
+// Helper to get string ID safely
+const getParamId = (req: Request): string => {
+  return String(req.params.id || '');
+};
+
 // ─── User Controller ─────────────────────────────────────────────────────────
 export const getUsers = asyncHandler(async (req: Request, res: Response) => {
   const result = await userService.getAll(req);
@@ -11,7 +16,8 @@ export const getUsers = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const getUserById = asyncHandler(async (req: Request, res: Response) => {
-  const user = await userService.getById(req.params.id);
+  const id = getParamId(req);
+  const user = await userService.getById(id);
   return ApiResponse.success(res, 'User fetched successfully', user);
 });
 
@@ -22,18 +28,21 @@ export const createUser = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const updateUser = asyncHandler(async (req: Request, res: Response) => {
+  const id = getParamId(req);
   const validated = updateUserSchema.parse(req.body);
-  const user = await userService.update(req.params.id, validated);
+  const user = await userService.update(id, validated);
   return ApiResponse.success(res, 'User updated successfully', user);
 });
 
 export const deleteUser = asyncHandler(async (req: Request, res: Response) => {
-  await userService.delete(req.params.id);
+  const id = getParamId(req);
+  await userService.delete(id);
   return ApiResponse.success(res, 'User deleted successfully');
 });
 
 export const toggleUserActive = asyncHandler(async (req: Request, res: Response) => {
-  const user = await userService.toggleActive(req.params.id);
+  const id = getParamId(req);
+  const user = await userService.toggleActive(id);
   return ApiResponse.success(res, `User status updated to ${user.isActive ? 'Active' : 'Inactive'}`, user);
 });
 
@@ -44,7 +53,8 @@ export const getRoles = asyncHandler(async (_req: Request, res: Response) => {
 });
 
 export const getRoleById = asyncHandler(async (req: Request, res: Response) => {
-  const role = await roleService.getById(req.params.id);
+  const id = getParamId(req);
+  const role = await roleService.getById(id);
   return ApiResponse.success(res, 'Role fetched successfully', role);
 });
 
@@ -54,11 +64,13 @@ export const createRole = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const updateRole = asyncHandler(async (req: Request, res: Response) => {
-  const role = await roleService.update(req.params.id, req.body);
+  const id = getParamId(req);
+  const role = await roleService.update(id, req.body);
   return ApiResponse.success(res, 'Role updated successfully', role);
 });
 
 export const deleteRole = asyncHandler(async (req: Request, res: Response) => {
-  await roleService.delete(req.params.id);
+  const id = getParamId(req);
+  await roleService.delete(id);
   return ApiResponse.success(res, 'Role deleted successfully');
 });
