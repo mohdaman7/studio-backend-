@@ -1,5 +1,7 @@
 import { Role, SYSTEM_ROLES, PERMISSIONS } from '../models/Role.model';
 import { User } from '../models/User.model';
+import { Company } from '../models/Company.model';
+import { Branch } from '../models/Branch.model';
 import { env } from '../config/env';
 import { logger } from '../utils/logger';
 
@@ -86,32 +88,126 @@ export const seedDatabase = async (): Promise<void> => {
         await Role.create(r);
         logger.info(`Seeded Role: ${r.name}`);
       } else {
-        // Sync permissions in case list grew
         existing.permissions = r.permissions;
         await existing.save();
       }
     }
 
-    // ─── 2. Seed Default Super Admin User ───
+    // ─── 2. Seed Default Tenant Company & Branch ───
+    const companyName = env.APP_NAME || 'Studio99 ERP';
+    let company = await Company.findOne({ name: companyName });
+
+    if (!company) {
+      company = await Company.create({
+        name: companyName,
+        email: env.DEFAULT_ADMIN_EMAIL,
+        phone: '+0000000000',
+        isActive: true,
+      });
+      logger.info(`Seeded Company: ${company.name}`);
+    }
+
+    const branchName = env.DEFAULT_BRANCH_NAME || 'Main Branch';
+    const branchCode = branchName.toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 10) || 'MAIN';
+    let branch = await Branch.findOne({ companyId: company._id, name: branchName });
+
+    if (!branch) {
+      // Check if code duplicate exists to prevent E11000 errors
+      const duplicateCodeBranch = await Branch.findOne({ companyId: company._id, code: branchCode });
+      if (duplicateCodeBranch) {
+        branch = duplicateCodeBranch;
+      } else {
+        branch = await Branch.create({
+          companyId: company._id,
+          name: branchName,
+          code: branchCode,
+          phone: '+0000000000',
+          email: env.DEFAULT_ADMIN_EMAIL,
+          isActive: true,
+        });
+        logger.info(`Seeded Branch: ${branch.name}`);
+      }
+    }
+
+    // ─── 3. Seed Default Super Admin User ───
     const superAdminRole = await Role.findOne({ slug: SYSTEM_ROLES.SUPER_ADMIN });
     if (!superAdminRole) {
       throw new Error('Super Admin role must be created before seeding user');
     }
 
     const adminEmail = env.DEFAULT_ADMIN_EMAIL;
-    const existingAdmin = await User.findOne({ email: adminEmail });
+    let existingAdmin = await User.findOne({ email: adminEmail });
 
     if (!existingAdmin) {
-      await User.create({
-        name: 'Super Admin',
-        email: adminEmail,
-        password: env.DEFAULT_ADMIN_PASSWORD,
-        role: superAdminRole._id,
-        isActive: true,
-      });
-      logger.info(`Seeded Super Admin User: ${adminEmail}`);
+      try {
+        await User.create({
+          companyId: company._id,
+          branchId: branch._id,
+          name: 'Super Admin',
+          email: adminEmail,
+          password: env.DEFAULT_ADMIN_PASSWORD,
+          role: superAdminRole._id,
+          isActive: true,
+        });
+        logger.info(`Seeded Super Admin User: ${adminEmail}`);
+      } catch (error: any) {
+        if (error?.code === 11000 || error?.codeName === 'DuplicateKey') {
+          existingAdmin = await User.findOne({ email: adminEmail });
+          if (!existingAdmin) {
+            throw error;
+          }
+        } else {
+          throw error;
+        }
+      }
+    }
+
+    if (existingAdmin) {
+      existingAdmin.companyId = company._id;
+      existingAdmin.branchId = branch._id;
+      existingAdmin.role = superAdminRole._id;
+      existingAdmin.isActive = true;
+      await existingAdmin.save();
+    }
+
+    // ─── 4. Seed epicadmin@gmail.com User ───
+    const epicAdminEmail = 'epicadmin@gmail.com';
+    let existingEpicAdmin = await User.findOne({ email: epicAdminEmail });
+
+    if (!existingEpicAdmin) {
+      try {
+        await User.create({
+          companyId: company._id,
+          branchId: branch._id,
+          name: 'Epic Admin',
+          email: epicAdminEmail,
+          password: env.DEFAULT_ADMIN_PASSWORD || 'Admin@123456',
+          role: superAdminRole._id,
+          isActive: true,
+        });
+        logger.info(`Seeded Epic Admin User: ${epicAdminEmail}`);
+      } catch (error: any) {
+        if (error?.code === 11000 || error?.codeName === 'DuplicateKey') {
+          existingEpicAdmin = await User.findOne({ email: epicAdminEmail });
+          if (!existingEpicAdmin) {
+            throw error;
+          }
+        } else {
+          throw error;
+        }
+      }
+    }
+
+    if (existingEpicAdmin) {
+      existingEpicAdmin.companyId = company._id;
+      existingEpicAdmin.branchId = branch._id;
+      existingEpicAdmin.role = superAdminRole._id;
+      existingEpicAdmin.isActive = true;
+      await existingEpicAdmin.save();
+      logger.info(`Updated epicadmin@gmail.com to Super Admin role`);
     }
   } catch (error: any) {
     logger.error(`❌ Seeding failed: ${error.message}`);
+    // Do not crash the entire server startup if database seeding fails, log it instead
   }
 };

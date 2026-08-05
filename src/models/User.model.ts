@@ -43,15 +43,11 @@ const userSchema = new Schema<IUser>(
 );
 
 // Encrypt Password
-userSchema.pre('save', async function (this: any, next: any) {
-  if (!this.isModified('password')) return next();
-  try {
-    const salt = await bcrypt.genSalt(12);
-    this.password = await bcrypt.hash(this.password, salt);
-    next();
-  } catch (err) {
-    next(err);
-  }
+userSchema.pre('save', async function (this: any) {
+  if (!this.isModified('password')) return;
+
+  const salt = await bcrypt.genSalt(12);
+  this.password = await bcrypt.hash(this.password, salt);
 });
 
 // Compare Method

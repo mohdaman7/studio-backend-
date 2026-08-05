@@ -17,10 +17,30 @@ const startServer = async () => {
     const app = createApp();
     const server = http.createServer(app);
 
-    // 4. Listen on PORT
-    server.listen(env.PORT, () => {
-      logger.info(`🚀 Server running in ${env.NODE_ENV} mode on port ${env.PORT}`);
-    });
+    // 4. Listen on PORT with fallback if the preferred port is already in use
+    const listenWithFallback = async (port: number): Promise<number> => {
+      return new Promise((resolve, reject) => {
+        const onError = (error: NodeJS.ErrnoException) => {
+          if (error.code === 'EADDRINUSE' && port < 6000) {
+            server.removeListener('error', onError);
+            resolve(listenWithFallback(port + 1));
+            return;
+          }
+
+          server.removeListener('error', onError);
+          reject(error);
+        };
+
+        server.once('error', onError);
+        server.listen(port, () => {
+          server.removeListener('error', onError);
+          resolve(port);
+        });
+      });
+    };
+
+    const actualPort = await listenWithFallback(env.PORT);
+    logger.info(`🚀 Server running in ${env.NODE_ENV} mode on port ${actualPort}`);
 
     // ─── Socket.IO Placeholder Hook ───
     // Future Phase integration would initialize Socket.IO server here:
