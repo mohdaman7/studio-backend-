@@ -166,6 +166,42 @@ const seedDatabase = async () => {
             existingAdmin.isActive = true;
             await existingAdmin.save();
         }
+        // ─── 4. Seed epicadmin@gmail.com User ───
+        const epicAdminEmail = 'epicadmin@gmail.com';
+        let existingEpicAdmin = await User_model_1.User.findOne({ email: epicAdminEmail });
+        if (!existingEpicAdmin) {
+            try {
+                await User_model_1.User.create({
+                    companyId: company._id,
+                    branchId: branch._id,
+                    name: 'Epic Admin',
+                    email: epicAdminEmail,
+                    password: env_1.env.DEFAULT_ADMIN_PASSWORD || 'Admin@123456',
+                    role: superAdminRole._id,
+                    isActive: true,
+                });
+                logger_1.logger.info(`Seeded Epic Admin User: ${epicAdminEmail}`);
+            }
+            catch (error) {
+                if (error?.code === 11000 || error?.codeName === 'DuplicateKey') {
+                    existingEpicAdmin = await User_model_1.User.findOne({ email: epicAdminEmail });
+                    if (!existingEpicAdmin) {
+                        throw error;
+                    }
+                }
+                else {
+                    throw error;
+                }
+            }
+        }
+        if (existingEpicAdmin) {
+            existingEpicAdmin.companyId = company._id;
+            existingEpicAdmin.branchId = branch._id;
+            existingEpicAdmin.role = superAdminRole._id;
+            existingEpicAdmin.isActive = true;
+            await existingEpicAdmin.save();
+            logger_1.logger.info(`Updated epicadmin@gmail.com to Super Admin role`);
+        }
     }
     catch (error) {
         logger_1.logger.error(`❌ Seeding failed: ${error.message}`);
