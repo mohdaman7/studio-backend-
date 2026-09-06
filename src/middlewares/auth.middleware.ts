@@ -31,16 +31,18 @@ export const authenticate = asyncHandler(async (req: AuthenticatedRequest, res: 
   try {
     const decoded = verifyAccessToken(token) as any;
     
-    // Check database to ensure user is active and has correct tenant scoping
-    const user = await User.findById(decoded.userId).select('isActive companyId branchId').lean();
+    // Check database to ensure user is active and get populated role
+    const user = await User.findById(decoded.userId).select('isActive companyId branchId role').populate('role').lean();
     if (!user || !user.isActive) {
       throw new AuthenticationError('User profile deactivated or deleted');
     }
 
+    const currentRoleSlug = (user.role as any)?.slug || decoded.role || 'super-admin';
+
     req.user = {
       userId: decoded.userId,
       email: decoded.email,
-      role: decoded.role,
+      role: currentRoleSlug,
       companyId: user.companyId.toString(),
       branchId: user.branchId?.toString(),
     };
@@ -53,7 +55,7 @@ export const authenticate = asyncHandler(async (req: AuthenticatedRequest, res: 
 
 /**
  * Authorize using system permission codes.
- * Bypasses checks for Super Admin role slugs automatically.
+ * Bypasses checks for Super Admin and Admin role slugs automatically.
  */
 export const authorizePermission = (permission: string) => {
   return asyncHandler(async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
@@ -61,7 +63,7 @@ export const authorizePermission = (permission: string) => {
       throw new AuthenticationError();
     }
 
-    if (req.user.role === 'super-admin') {
+    if (req.user.role === 'super-admin' || req.user.role === 'admin' || req.user.role === 'Super Admin' || req.user.role === 'Admin') {
       return next();
     }
 

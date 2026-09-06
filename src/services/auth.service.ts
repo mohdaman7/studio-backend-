@@ -9,18 +9,21 @@ export class AuthService {
     if (existing) throw new AppError('Email already in use', 409);
 
     const user = await userRepository.create(input);
-    const { accessToken, refreshToken } = generateTokenPair(user._id.toString(), user.email, 'user');
-    return { user, accessToken, refreshToken };
+    const populated = await User.findById(user._id).populate('role').exec();
+    const roleSlug = (populated?.role as any)?.slug || 'cashier';
+    const { accessToken, refreshToken } = generateTokenPair(user._id.toString(), user.email, roleSlug);
+    return { user: populated || user, accessToken, refreshToken };
   }
 
   async login(input: any) {
-    const user = await userRepository.findByEmail(input.email);
+    const user = await User.findOne({ email: input.email }).select('+password').populate('role').exec();
     if (!user) throw new AppError('Invalid email or password', 401);
 
     const isMatch = await user.comparePassword(input.password);
     if (!isMatch) throw new AppError('Invalid email or password', 401);
 
-    const { accessToken, refreshToken } = generateTokenPair(user._id.toString(), user.email, 'user');
+    const roleSlug = (user.role as any)?.slug || 'super-admin';
+    const { accessToken, refreshToken } = generateTokenPair(user._id.toString(), user.email, roleSlug);
     return { user, accessToken, refreshToken };
   }
 
@@ -30,7 +33,7 @@ export class AuthService {
       const user = await User.findById(decoded.userId).populate('role').exec();
       if (!user) throw new AppError('User not found', 404);
 
-      const roleSlug = (user.role as any)?.slug || 'user';
+      const roleSlug = (user.role as any)?.slug || 'super-admin';
       return generateTokenPair(user._id.toString(), user.email, roleSlug);
     } catch (error) {
       throw new AppError('Invalid refresh token', 401);
@@ -38,7 +41,6 @@ export class AuthService {
   }
 
   async logout(userId: string, token: string) {
-    // Clear refresh tokens if stored
     await User.findByIdAndUpdate(userId, { $pull: { refreshTokens: token } }).exec();
   }
 
