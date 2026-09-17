@@ -11,17 +11,20 @@ class AuthService {
         if (existing)
             throw new error_middleware_1.AppError('Email already in use', 409);
         const user = await user_repository_1.userRepository.create(input);
-        const { accessToken, refreshToken } = (0, tokens_1.generateTokenPair)(user._id.toString(), user.email, 'user');
-        return { user, accessToken, refreshToken };
+        const populated = await User_model_1.User.findById(user._id).populate('role').exec();
+        const roleSlug = populated?.role?.slug || 'cashier';
+        const { accessToken, refreshToken } = (0, tokens_1.generateTokenPair)(user._id.toString(), user.email, roleSlug);
+        return { user: populated || user, accessToken, refreshToken };
     }
     async login(input) {
-        const user = await user_repository_1.userRepository.findByEmail(input.email);
+        const user = await User_model_1.User.findOne({ email: input.email }).select('+password').populate('role').exec();
         if (!user)
             throw new error_middleware_1.AppError('Invalid email or password', 401);
         const isMatch = await user.comparePassword(input.password);
         if (!isMatch)
             throw new error_middleware_1.AppError('Invalid email or password', 401);
-        const { accessToken, refreshToken } = (0, tokens_1.generateTokenPair)(user._id.toString(), user.email, 'user');
+        const roleSlug = user.role?.slug || 'super-admin';
+        const { accessToken, refreshToken } = (0, tokens_1.generateTokenPair)(user._id.toString(), user.email, roleSlug);
         return { user, accessToken, refreshToken };
     }
     async refreshTokens(token) {
@@ -30,7 +33,7 @@ class AuthService {
             const user = await User_model_1.User.findById(decoded.userId).populate('role').exec();
             if (!user)
                 throw new error_middleware_1.AppError('User not found', 404);
-            const roleSlug = user.role?.slug || 'user';
+            const roleSlug = user.role?.slug || 'super-admin';
             return (0, tokens_1.generateTokenPair)(user._id.toString(), user.email, roleSlug);
         }
         catch (error) {
@@ -38,7 +41,6 @@ class AuthService {
         }
     }
     async logout(userId, token) {
-        // Clear refresh tokens if stored
         await User_model_1.User.findByIdAndUpdate(userId, { $pull: { refreshTokens: token } }).exec();
     }
     async getMe(userId) {

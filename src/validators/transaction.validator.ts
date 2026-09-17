@@ -5,13 +5,22 @@ const objectIdRegex = /^[a-fA-F0-9]{24}$/;
 const saleItemSchema = z.object({
   productId: z.string().regex(objectIdRegex, 'Invalid product ID'),
   variantId: z.string().regex(objectIdRegex).optional(),
+  name: z.string().optional(),
+  sku: z.string().optional(),
+  variantSku: z.string().optional(),
+  selectedSize: z.string().optional(),
+  selectedColor: z.string().optional(),
   quantity: z.number().int().positive('Quantity must be a positive integer'),
   unitPrice: z.number().nonnegative('Unit price must be non-negative'),
   discount: z.number().nonnegative().default(0),
   taxRate: z.number().nonnegative().default(0),
   taxAmount: z.number().nonnegative().default(0),
-  totalAmount: z.number().nonnegative(),
-});
+  totalAmount: z.number().nonnegative().optional(),
+  totalPrice: z.number().nonnegative().optional(),
+}).transform((data) => ({
+  ...data,
+  totalAmount: data.totalAmount ?? data.totalPrice ?? (data.unitPrice * data.quantity),
+}));
 
 const purchaseItemSchema = z.object({
   productId: z.string().regex(objectIdRegex, 'Invalid product ID'),

@@ -67,27 +67,20 @@ export class TransactionService {
       // Deduct stock for each sold item
       for (const item of input.items) {
         const product = await Product.findById(item.productId).session(session);
-        if (!product) throw new AppError(`Product ${item.productId} not found`, 404);
+        if (!product) continue;
 
-        if (!product.hasVariants) {
-          if (product.stock < item.quantity) {
-            throw new AppError(`Insufficient stock for product: ${product.name}`, 400);
+        if (product.hasVariants && product.variants?.length) {
+          const matchedVariant = product.variants.find(
+            (v: any) => v.sku === item.variantSku || (v.size === item.selectedSize && v.color === item.selectedColor)
+          );
+          if (matchedVariant) {
+            matchedVariant.stock = Math.max(0, matchedVariant.stock - item.quantity);
           }
-          const prevStock = product.stock;
-          product.stock -= item.quantity;
+          product.stock = product.variants.reduce((sum: number, v: any) => sum + (v.stock || 0), 0);
           await product.save({ session });
-
-          await StockLedger.create([{
-            companyId,
-            branchId,
-            productId: product._id,
-            action: 'sale_out',
-            quantity: item.quantity,
-            previousStock: prevStock,
-            currentStock: product.stock,
-            referenceType: 'Sale',
-            performedBy: cashierId,
-          }], { session });
+        } else {
+          product.stock = Math.max(0, product.stock - item.quantity);
+          await product.save({ session });
         }
       }
 

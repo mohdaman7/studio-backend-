@@ -202,6 +202,43 @@ const seedDatabase = async () => {
             await existingEpicAdmin.save();
             logger_1.logger.info(`Updated epicadmin@gmail.com to Super Admin role`);
         }
+        // ─── 5. Seed Employee / Cashier User ───
+        const cashierRole = await Role_model_1.Role.findOne({ slug: Role_model_1.SYSTEM_ROLES.CASHIER });
+        const employeeEmail = 'employee@studio99.com';
+        let existingEmployee = await User_model_1.User.findOne({ email: employeeEmail });
+        if (!existingEmployee && cashierRole) {
+            try {
+                await User_model_1.User.create({
+                    companyId: company._id,
+                    branchId: branch._id,
+                    name: 'Sarah (Staff / Cashier)',
+                    email: employeeEmail,
+                    password: env_1.env.DEFAULT_ADMIN_PASSWORD || 'Admin@123456',
+                    role: cashierRole._id,
+                    isActive: true,
+                });
+                logger_1.logger.info(`Seeded Employee User: ${employeeEmail}`);
+            }
+            catch (error) {
+                if (error?.code === 11000 || error?.codeName === 'DuplicateKey') {
+                    existingEmployee = await User_model_1.User.findOne({ email: employeeEmail });
+                    if (!existingEmployee) {
+                        throw error;
+                    }
+                }
+                else {
+                    throw error;
+                }
+            }
+        }
+        if (existingEmployee && cashierRole) {
+            existingEmployee.companyId = company._id;
+            existingEmployee.branchId = branch._id;
+            existingEmployee.role = cashierRole._id;
+            existingEmployee.isActive = true;
+            await existingEmployee.save();
+            logger_1.logger.info(`Updated employee@studio99.com to Cashier role`);
+        }
     }
     catch (error) {
         logger_1.logger.error(`❌ Seeding failed: ${error.message}`);

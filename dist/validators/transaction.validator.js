@@ -6,13 +6,22 @@ const objectIdRegex = /^[a-fA-F0-9]{24}$/;
 const saleItemSchema = zod_1.z.object({
     productId: zod_1.z.string().regex(objectIdRegex, 'Invalid product ID'),
     variantId: zod_1.z.string().regex(objectIdRegex).optional(),
+    name: zod_1.z.string().optional(),
+    sku: zod_1.z.string().optional(),
+    variantSku: zod_1.z.string().optional(),
+    selectedSize: zod_1.z.string().optional(),
+    selectedColor: zod_1.z.string().optional(),
     quantity: zod_1.z.number().int().positive('Quantity must be a positive integer'),
     unitPrice: zod_1.z.number().nonnegative('Unit price must be non-negative'),
     discount: zod_1.z.number().nonnegative().default(0),
     taxRate: zod_1.z.number().nonnegative().default(0),
     taxAmount: zod_1.z.number().nonnegative().default(0),
-    totalAmount: zod_1.z.number().nonnegative(),
-});
+    totalAmount: zod_1.z.number().nonnegative().optional(),
+    totalPrice: zod_1.z.number().nonnegative().optional(),
+}).transform((data) => ({
+    ...data,
+    totalAmount: data.totalAmount ?? data.totalPrice ?? (data.unitPrice * data.quantity),
+}));
 const purchaseItemSchema = zod_1.z.object({
     productId: zod_1.z.string().regex(objectIdRegex, 'Invalid product ID'),
     variantId: zod_1.z.string().regex(objectIdRegex).optional(),

@@ -71,25 +71,18 @@ class TransactionService {
             for (const item of input.items) {
                 const product = await Product_model_1.Product.findById(item.productId).session(session);
                 if (!product)
-                    throw new error_middleware_1.AppError(`Product ${item.productId} not found`, 404);
-                if (!product.hasVariants) {
-                    if (product.stock < item.quantity) {
-                        throw new error_middleware_1.AppError(`Insufficient stock for product: ${product.name}`, 400);
+                    continue;
+                if (product.hasVariants && product.variants?.length) {
+                    const matchedVariant = product.variants.find((v) => v.sku === item.variantSku || (v.size === item.selectedSize && v.color === item.selectedColor));
+                    if (matchedVariant) {
+                        matchedVariant.stock = Math.max(0, matchedVariant.stock - item.quantity);
                     }
-                    const prevStock = product.stock;
-                    product.stock -= item.quantity;
+                    product.stock = product.variants.reduce((sum, v) => sum + (v.stock || 0), 0);
                     await product.save({ session });
-                    await StockLedger_model_1.StockLedger.create([{
-                            companyId,
-                            branchId,
-                            productId: product._id,
-                            action: 'sale_out',
-                            quantity: item.quantity,
-                            previousStock: prevStock,
-                            currentStock: product.stock,
-                            referenceType: 'Sale',
-                            performedBy: cashierId,
-                        }], { session });
+                }
+                else {
+                    product.stock = Math.max(0, product.stock - item.quantity);
+                    await product.save({ session });
                 }
             }
             const [sale] = await Sale_model_1.Sale.create([{

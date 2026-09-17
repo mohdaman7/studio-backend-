@@ -78,7 +78,6 @@ userSchema.set('toJSON', {
     },
 });
 // Tenant isolation indexes
-userSchema.index({ email: 1 }, { unique: true });
 userSchema.index({ companyId: 1, email: 1 });
 userSchema.index({ branchId: 1 });
 exports.User = mongoose_1.default.model('User', userSchema);
