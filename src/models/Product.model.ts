@@ -22,12 +22,16 @@ export interface IProduct extends Document {
   description?: string;
   sku: string;
   barcode?: string;
+  size?: string;
+  color?: string;
+  subCategory?: string;
   categoryId?: Types.ObjectId;
   brandId?: Types.ObjectId;
   supplierId?: Types.ObjectId;
   hasVariants: boolean;
   variants: IVariant[];
   price: number;
+  mrp?: number;
   salePrice?: number;
   costPrice: number;
   stock: number;
@@ -65,12 +69,16 @@ const productSchema = new Schema<IProduct>(
     description: { type: String },
     sku: { type: String, required: true, uppercase: true, trim: true },
     barcode: { type: String },
+    size: { type: String },
+    color: { type: String },
+    subCategory: { type: String },
     categoryId: { type: Schema.Types.ObjectId, ref: 'Category' },
     brandId: { type: Schema.Types.ObjectId, ref: 'Brand' },
     supplierId: { type: Schema.Types.ObjectId, ref: 'Supplier' },
     hasVariants: { type: Boolean, default: false },
     variants: [variantSchema],
     price: { type: Number, required: true, min: 0 },
+    mrp: { type: Number },
     salePrice: { type: Number, min: 0 },
     costPrice: { type: Number, required: true, default: 0, min: 0 },
     stock: { type: Number, required: true, default: 0, min: 0 },
