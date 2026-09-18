@@ -4,6 +4,7 @@ import { logger } from './logger';
 interface SSEClient {
   id: string;
   userId: string;
+  role: string;
   companyId: string;
   res: Response;
 }
@@ -17,7 +18,6 @@ class SSEManager {
   }
 
   private startHeartbeat() {
-    // Send comment ping every 25s to keep connections alive on Render / proxies
     this.heartbeatTimer = setInterval(() => {
       this.clients.forEach((client, id) => {
         try {
@@ -27,25 +27,25 @@ class SSEManager {
           this.removeClient(id);
         }
       });
-    }, 25000);
+    }, 20000);
   }
 
-  public registerClient(companyId: string, userId: string, res: Response): string {
-    const id = `${companyId}_${userId}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+  public registerClient(companyId: string, userId: string, role: string, res: Response): string {
+    const id = `${companyId || 'global'}_${userId}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     
-    // Configure SSE Response Headers
-    res.setHeader('Content-Type', 'text/event-stream');
+    // Set headers
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no'); // Disable proxy buffering for Nginx/Render
+    res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders?.();
 
     // Send connected greeting
     res.write(`event: connected\ndata: ${JSON.stringify({ message: 'Connected to Studio99 Real-time Stream', clientId: id })}\n\n`);
 
-    const client: SSEClient = { id, userId, companyId, res };
+    const client: SSEClient = { id, userId, role, companyId: companyId ? companyId.toString() : '', res };
     this.clients.set(id, client);
-    logger.info(`[SSE] Client connected: ${id}. Total active: ${this.clients.size}`);
+    logger.info(`[SSE] Client registered: ${id} (Role: ${role}, Company: ${companyId}). Total active: ${this.clients.size}`);
 
     res.on('close', () => {
       this.removeClient(id);
@@ -64,9 +64,20 @@ class SSEManager {
   public broadcastCompanyEvent(companyId: string, event: string, payload: any) {
     let sentCount = 0;
     const dataString = JSON.stringify(payload);
+    const targetCompId = companyId ? companyId.toString() : '';
 
     this.clients.forEach((client, id) => {
-      if (client.companyId === companyId) {
+      // Send to matching company, or global admin clients
+      const isMatch = 
+        !client.companyId || 
+        !targetCompId || 
+        client.companyId === targetCompId || 
+        client.role === 'admin' || 
+        client.role === 'super-admin' || 
+        client.role === 'Super Admin' ||
+        client.role === 'Admin';
+
+      if (isMatch) {
         try {
           client.res.write(`event: ${event}\ndata: ${dataString}\n\n`);
           sentCount++;
@@ -77,7 +88,7 @@ class SSEManager {
       }
     });
 
-    logger.info(`[SSE] Broadcasted '${event}' to ${sentCount} clients in company ${companyId}`);
+    logger.info(`[SSE] Broadcasted '${event}' to ${sentCount}/${this.clients.size} clients (Company: ${companyId})`);
   }
 }
 

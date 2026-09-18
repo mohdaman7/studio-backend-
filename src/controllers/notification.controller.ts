@@ -8,32 +8,28 @@ import mongoose from 'mongoose';
 
 // ─── SSE Stream for Real-time Notifications & Sales ───────────────────────────
 export const streamNotifications = (req: Request, res: Response) => {
-  const companyId = (req.user as any)?.companyId;
-  const userId = (req.user as any)?.userId;
+  const companyId = (req.user as any)?.companyId || '';
+  const userId = (req.user as any)?.userId || 'anonymous';
+  const role = (req.user as any)?.role || 'cashier';
 
-  if (!companyId || !userId) {
-    res.status(401).json({ success: false, message: 'Unauthorized for stream' });
-    return;
-  }
-
-  sseManager.registerClient(companyId, userId, res);
+  sseManager.registerClient(companyId, userId, role, res);
 };
 
 // ─── Get Recent Sales for Polling Fallback ────────────────────────────────────
 export const getRecentSales = asyncHandler(async (req: Request, res: Response) => {
   const companyId = (req.user as any)?.companyId;
-  if (!companyId) {
-    return ApiResponse.success(res, 'No company context', []);
+  const limit = Math.min(parseInt((req.query.limit as string) || '20', 10), 50);
+
+  const filter: any = {};
+  if (companyId && mongoose.Types.ObjectId.isValid(companyId)) {
+    filter.$or = [
+      { companyId: new mongoose.Types.ObjectId(companyId) },
+      { companyId: { $exists: false } },
+    ];
   }
 
-  const limit = Math.min(parseInt((req.query.limit as string) || '15', 10), 50);
-  const since = req.query.since ? new Date(req.query.since as string) : new Date(Date.now() - 24 * 60 * 60 * 1000);
-
-  const sales = await Sale.find({
-    companyId: new mongoose.Types.ObjectId(companyId),
-    createdAt: { $gte: since },
-  })
-    .sort({ createdAt: -1 })
+  const sales = await Sale.find(filter)
+    .sort({ createdAt: -1, saleDate: -1 })
     .limit(limit)
     .populate('customerId', 'name phone')
     .populate('cashierId', 'name')
@@ -54,7 +50,7 @@ export const getRecentSales = asyncHandler(async (req: Request, res: Response) =
     paymentMethod: sale.paymentMethod,
     itemCount: sale.items?.length || 0,
     items: (sale.items || []).map((item: any) => ({
-      name: item.productId?.name || 'Custom Product',
+      name: item.productId?.name || 'Product',
       quantity: item.quantity,
       unitPrice: item.unitPrice,
       totalPrice: item.totalAmount || item.unitPrice * item.quantity,
@@ -62,7 +58,7 @@ export const getRecentSales = asyncHandler(async (req: Request, res: Response) =
       selectedColor: item.selectedColor,
       sku: item.productId?.sku,
     })),
-    timestamp: sale.saleDate || sale.createdAt,
+    timestamp: sale.saleDate || sale.createdAt || new Date().toISOString(),
     isRead: false,
   }));
 
@@ -77,12 +73,12 @@ export const getNotifications = asyncHandler(async (req: Request, res: Response)
   const limit = parseInt((req.query.limit as string) || '20', 10);
   const skip = (page - 1) * limit;
 
-  const filter: any = {
-    $or: [
-      { userId: new mongoose.Types.ObjectId(userId) },
-      { isGlobal: true, companyId: new mongoose.Types.ObjectId(companyId) },
-    ],
-  };
+  const orConditions: any[] = [{ isGlobal: true }];
+  if (userId && mongoose.Types.ObjectId.isValid(userId)) {
+    orConditions.push({ userId: new mongoose.Types.ObjectId(userId) });
+  }
+
+  const filter: any = { $or: orConditions };
   if (req.query.isRead !== undefined) filter.isRead = req.query.isRead === 'true';
 
   const [data, total] = await Promise.all([
