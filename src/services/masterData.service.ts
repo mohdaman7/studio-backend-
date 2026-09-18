@@ -142,7 +142,24 @@ class CustomerService {
       Customer.find(filter).sort({ name: 1 }).skip(skip).limit(limit).lean().exec(),
       Customer.countDocuments(filter).exec(),
     ]);
-    return { data, total, page, limit };
+
+    const customerIds = data.map((c: any) => c._id);
+    const salesData = await mongoose.model('Sale').aggregate([
+      { $match: { customerId: { $in: customerIds }, status: { $nin: ['cancelled', 'refunded'] } } },
+      { $group: { _id: '$customerId', totalSpent: { $sum: '$grandTotal' } } }
+    ]);
+
+    const salesMap = salesData.reduce((acc: any, curr: any) => {
+      acc[curr._id.toString()] = curr.totalSpent;
+      return acc;
+    }, {});
+
+    const enhancedData = data.map((c: any) => ({
+      ...c,
+      totalSpent: salesMap[c._id.toString()] || 0,
+    }));
+
+    return { data: enhancedData, total, page, limit };
   }
 
   async getById(id: string) {
