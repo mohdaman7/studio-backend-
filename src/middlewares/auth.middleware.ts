@@ -22,6 +22,8 @@ export const authenticate = asyncHandler(async (req: AuthenticatedRequest, res: 
     token = req.headers.authorization.split(' ')[1];
   } else if (req.cookies?.accessToken) {
     token = req.cookies.accessToken;
+  } else if (typeof req.query?.token === 'string') {
+    token = req.query.token;
   }
 
   if (!token) {

@@ -1,3 +1,7 @@
+import { sseManager } from '../utils/sseManager';
+import { Notification } from '../models/Notification.model';
+import { User } from '../models/User.model';
+import { Customer } from '../models/Customer.model';
 import mongoose from 'mongoose';
 import { Sale } from '../models/Sale.model';
 import { Purchase } from '../models/Purchase.model';
@@ -117,6 +121,66 @@ export class TransactionService {
       }
 
       await session.commitTransaction();
+
+      // Broadcast sale in background & create system notification
+      try {
+        const [cashierUser, customerUser, productItems] = await Promise.all([
+          User.findById(cashierId).select('name').lean(),
+          input.customerId ? Customer.findById(input.customerId).select('name phone').lean() : null,
+          Product.find({ _id: { $in: input.items.map((i: any) => i.productId) } }).select('name sku').lean(),
+        ]);
+
+        const cashierName = cashierUser?.name || 'Staff Member';
+        const customerName = customerUser?.name || 'Walk-in Customer';
+        const customerPhone = customerUser?.phone || '';
+
+        const itemMap = new Map(productItems.map((p: any) => [p._id.toString(), p]));
+
+        const notificationPayload = {
+          id: sale._id.toString(),
+          invoiceNumber: sale.invoiceNumber,
+          cashierName,
+          customerName,
+          customerPhone,
+          grandTotal: sale.grandTotal,
+          subtotal: sale.subtotal,
+          discount: sale.discount,
+          tax: sale.taxTotal,
+          paymentMethod: sale.paymentMethod,
+          itemCount: sale.items?.length || 0,
+          items: (sale.items || []).map((item: any) => {
+            const p = itemMap.get(item.productId?.toString());
+            return {
+              name: p?.name || 'Product',
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              totalPrice: item.totalAmount || item.unitPrice * item.quantity,
+              selectedSize: item.selectedSize,
+              selectedColor: item.selectedColor,
+              sku: p?.sku,
+            };
+          }),
+          timestamp: sale.saleDate || new Date().toISOString(),
+          isRead: false,
+        };
+
+        // Create persistent global Notification record for company
+        await Notification.create({
+          companyId,
+          branchId,
+          title: 'Live POS Sale Completed',
+          message: `Sale ${sale.invoiceNumber} (₹${sale.grandTotal.toLocaleString()}) recorded by ${cashierName}`,
+          type: 'sale',
+          isGlobal: true,
+          actionUrl: '/transactions',
+        });
+
+        // Broadcast to all company connected devices (Admin, Managers, Terminals)
+        sseManager.broadcastCompanyEvent(companyId.toString(), 'new_sale', notificationPayload);
+      } catch (broadcastErr) {
+        console.error('Error broadcasting sale notification:', broadcastErr);
+      }
+
       return sale;
     } catch (err) {
       await session.abortTransaction();
