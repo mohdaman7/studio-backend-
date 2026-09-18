@@ -12,6 +12,9 @@ import { registerRoutes } from '../routes';
 export const createApp = (): Application => {
   const app = express();
 
+  // Trust reverse proxy (Render, Cloudflare, Vercel, etc.)
+  app.set('trust proxy', 1);
+
   // Helmet Security Headers
   app.use(helmet());
 
