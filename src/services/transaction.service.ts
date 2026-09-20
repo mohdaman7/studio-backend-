@@ -68,16 +68,19 @@ export class TransactionService {
       const companyId = input.companyId;
       const branchId = input.branchId;
 
-      // Deduct stock for each sold item
+      // Deduct stock for each sold item and stage stock ledger records
+      const ledgerEntries: any[] = [];
       for (const item of input.items) {
         const product = await Product.findById(item.productId).session(session);
         if (!product) continue;
-
+        const previousStock = product.stock;
+        let matchedVariantId: any = undefined;
         if (product.hasVariants && product.variants?.length) {
           const matchedVariant = product.variants.find(
             (v: any) => v.sku === item.variantSku || (v.size === item.selectedSize && v.color === item.selectedColor)
           );
           if (matchedVariant) {
+            matchedVariantId = matchedVariant._id;
             matchedVariant.stock = Math.max(0, matchedVariant.stock - item.quantity);
           }
           product.stock = product.variants.reduce((sum: number, v: any) => sum + (v.stock || 0), 0);
@@ -86,8 +89,20 @@ export class TransactionService {
           product.stock = Math.max(0, product.stock - item.quantity);
           await product.save({ session });
         }
+        ledgerEntries.push({
+          companyId,
+          branchId,
+          productId: product._id,
+          variantId: matchedVariantId,
+          action: 'sale_out',
+          quantity: item.quantity,
+          previousStock,
+          currentStock: product.stock,
+          referenceType: 'Sale',
+          notes: `POS Checkout ${invoiceNumber}${item.selectedSize ? ` [${item.selectedSize}]` : ''}`,
+          performedBy: cashierId,
+        });
       }
-
       const [sale] = await Sale.create([{
         companyId,
         branchId,
@@ -106,6 +121,11 @@ export class TransactionService {
         cashierId,
         saleDate: input.saleDate ? new Date(input.saleDate) : new Date(),
       }], { session });
+      // Link referenceId to newly created sale and insert ledger records within transaction
+      if (ledgerEntries.length > 0) {
+        const finalizedLedger = ledgerEntries.map((l) => ({ ...l, referenceId: sale._id }));
+        await StockLedger.create(finalizedLedger, { session });
+      }
 
       if (input.paymentMethod === 'credit' && input.customerId) {
         await CreditSale.create([{
@@ -191,11 +211,65 @@ export class TransactionService {
   }
 
   async cancelSale(id: string, userId: string) {
-    const sale = await Sale.findById(id);
-    if (!sale) throw new AppError('Sale not found', 404);
-    if (sale.status !== 'completed') throw new AppError('Only completed sales can be cancelled', 400);
-    sale.status = 'cancelled';
-    return sale.save();
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+      const sale = await Sale.findById(id).session(session);
+      if (!sale) throw new AppError('Sale not found', 404);
+      if (sale.status !== 'completed') throw new AppError('Only completed sales can be cancelled', 400);
+      sale.status = 'cancelled';
+      await sale.save({ session });
+      // Restore physical stock and record return in StockLedger
+      for (const item of sale.items) {
+        const product = await Product.findById(item.productId).session(session);
+        if (!product) continue;
+        const prevStock = product.stock;
+        let matchedVariantId: any = undefined;
+        if (product.hasVariants && product.variants?.length) {
+          const matchedVariant = product.variants.find(
+            (v: any) =>
+              (item.variantId && v._id?.toString() === item.variantId?.toString()) ||
+              (item.sku && v.sku === item.sku)
+          );
+          if (matchedVariant) {
+            matchedVariantId = matchedVariant._id;
+            matchedVariant.stock = (matchedVariant.stock || 0) + item.quantity;
+          }
+          product.stock = product.variants.reduce((sum: number, v: any) => sum + (v.stock || 0), 0);
+          await product.save({ session });
+        } else {
+          product.stock = (product.stock || 0) + item.quantity;
+          await product.save({ session });
+        }
+        await StockLedger.create([{
+          companyId: sale.companyId,
+          branchId: sale.branchId,
+          productId: product._id,
+          variantId: matchedVariantId,
+          action: 'return_in',
+          quantity: item.quantity,
+          previousStock: prevStock,
+          currentStock: product.stock,
+          referenceType: 'Return',
+          referenceId: sale._id,
+          notes: `Stock Restored on Sale Cancelled: ${sale.invoiceNumber}`,
+          performedBy: userId,
+        }], { session });
+      }
+      // If credit sale was linked, clear due amount
+      await CreditSale.updateMany(
+        { saleId: sale._id },
+        { $set: { dueAmount: 0 } },
+        { session }
+      );
+      await session.commitTransaction();
+      return sale;
+    } catch (err) {
+      await session.abortTransaction();
+      throw err;
+    } finally {
+      session.endSession();
+    }
   }
 
   // ─── Purchases ──────────────────────────────────────────────────────────────

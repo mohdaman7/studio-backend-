@@ -100,6 +100,8 @@ productSchema.index({ name: 'text', tags: 'text' });
 productSchema.index({ categoryId: 1 });
 productSchema.index({ brandId: 1 });
 productSchema.index({ stock: 1 });
+productSchema.index({ 'variants.barcode': 1 });
+productSchema.index({ 'variants.sku': 1 });
 
 export const Product = mongoose.model<IProduct>('Product', productSchema);
 export default Product;

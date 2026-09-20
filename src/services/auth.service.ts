@@ -24,18 +24,32 @@ export class AuthService {
 
     const roleSlug = (user.role as any)?.slug || 'super-admin';
     const { accessToken, refreshToken } = generateTokenPair(user._id.toString(), user.email, roleSlug);
+    // Save refresh token whitelist (keep last 5 for multi-device login)
+    await User.findByIdAndUpdate(user._id, {
+      $push: { refreshTokens: { $each: [refreshToken], $slice: -5 } },
+      lastLoginAt: new Date(),
+    }).exec();
     return { user, accessToken, refreshToken };
   }
 
   async refreshTokens(token: string) {
     try {
       const decoded = verifyRefreshToken(token) as any;
-      const user = await User.findById(decoded.userId).populate('role').exec();
-      if (!user) throw new AppError('User not found', 404);
+      const user = await User.findOne({ _id: decoded.userId, refreshTokens: token }).populate('role').exec();
+      if (!user) throw new AppError('Refresh token revoked or invalid', 401);
 
       const roleSlug = (user.role as any)?.slug || 'super-admin';
-      return generateTokenPair(user._id.toString(), user.email, roleSlug);
+      const newTokens = generateTokenPair(user._id.toString(), user.email, roleSlug);
+      // Rotate token: replace old token with new one
+      await User.findByIdAndUpdate(user._id, {
+        $pull: { refreshTokens: token },
+      }).exec();
+      await User.findByIdAndUpdate(user._id, {
+        $push: { refreshTokens: { $each: [newTokens.refreshToken], $slice: -5 } },
+      }).exec();
+      return newTokens;
     } catch (error) {
+      if (error instanceof AppError) throw error;
       throw new AppError('Invalid refresh token', 401);
     }
   }
