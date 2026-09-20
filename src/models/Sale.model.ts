@@ -6,6 +6,8 @@ export type SaleStatus = 'completed' | 'refunded' | 'cancelled' | 'hold';
 export interface ISaleItem {
   productId: Types.ObjectId;
   variantId?: Types.ObjectId;
+  sku?: string;
+  variantSku?: string;
   quantity: number;
   unitPrice: number;
   discount: number; // Item-level discount

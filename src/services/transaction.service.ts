@@ -80,7 +80,7 @@ export class TransactionService {
             (v: any) => v.sku === item.variantSku || (v.size === item.selectedSize && v.color === item.selectedColor)
           );
           if (matchedVariant) {
-            matchedVariantId = matchedVariant._id;
+            matchedVariantId = (matchedVariant as any)._id;
             matchedVariant.stock = Math.max(0, matchedVariant.stock - item.quantity);
           }
           product.stock = product.variants.reduce((sum: number, v: any) => sum + (v.stock || 0), 0);
@@ -228,11 +228,12 @@ export class TransactionService {
         if (product.hasVariants && product.variants?.length) {
           const matchedVariant = product.variants.find(
             (v: any) =>
-              (item.variantId && v._id?.toString() === item.variantId?.toString()) ||
-              (item.sku && v.sku === item.sku)
+              (item.variantId && (v as any)._id?.toString() === item.variantId?.toString()) ||
+              ((item as any).sku && v.sku === (item as any).sku) ||
+              ((item as any).variantSku && v.sku === (item as any).variantSku)
           );
           if (matchedVariant) {
-            matchedVariantId = matchedVariant._id;
+            matchedVariantId = (matchedVariant as any)._id;
             matchedVariant.stock = (matchedVariant.stock || 0) + item.quantity;
           }
           product.stock = product.variants.reduce((sum: number, v: any) => sum + (v.stock || 0), 0);

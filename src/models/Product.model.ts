@@ -1,6 +1,8 @@
 import mongoose, { Schema, Document, Types } from 'mongoose';
 
 export interface IVariant {
+  _id?: Types.ObjectId;
+  id?: string;
   sku: string;
   size?: string;
   color?: string;
