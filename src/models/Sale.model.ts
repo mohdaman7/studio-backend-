@@ -16,12 +16,36 @@ export interface ISaleItem {
   totalAmount: number;
 }
 
+export interface IReturnItem {
+  productId: Types.ObjectId;
+  variantId?: Types.ObjectId;
+  sku?: string;
+  variantSku?: string;
+  name?: string;
+  selectedSize?: string;
+  selectedColor?: string;
+  quantity: number;
+  unitPrice: number;
+  taxRate?: number;
+  taxAmount?: number;
+  totalAmount: number;
+  originalInvoiceNumber?: string;
+  reason?: string;
+  condition?: 'restockable' | 'damaged_scrap';
+}
+
 export interface ISale extends Document {
   companyId: Types.ObjectId;
   branchId: Types.ObjectId;
   invoiceNumber: string; // e.g. INV-000001
   customerId?: Types.ObjectId; // Optional for Guest checkout
   items: ISaleItem[];
+  isExchange: boolean;
+  returnedItems: IReturnItem[];
+  returnCreditTotal: number;
+  netAmount: number;
+  refundAmount: number;
+  refundMethod?: string;
   subtotal: number;
   taxTotal: number;
   discount: number; // Order-level discount
@@ -50,6 +74,24 @@ const saleItemSchema = new Schema<ISaleItem>({
   totalAmount: { type: Number, required: true, min: 0 },
 });
 
+const returnItemSchema = new Schema<IReturnItem>({
+  productId: { type: Schema.Types.ObjectId, ref: 'Product', required: true },
+  variantId: { type: Schema.Types.ObjectId },
+  sku: { type: String },
+  variantSku: { type: String },
+  name: { type: String },
+  selectedSize: { type: String },
+  selectedColor: { type: String },
+  quantity: { type: Number, required: true, min: 1 },
+  unitPrice: { type: Number, required: true, min: 0 },
+  taxRate: { type: Number, default: 0 },
+  taxAmount: { type: Number, default: 0 },
+  totalAmount: { type: Number, required: true, min: 0 },
+  originalInvoiceNumber: { type: String },
+  reason: { type: String, default: 'Exchange / Return' },
+  condition: { type: String, enum: ['restockable', 'damaged_scrap'], default: 'restockable' },
+});
+
 const saleSchema = new Schema<ISale>(
   {
     companyId: { type: Schema.Types.ObjectId, ref: 'Company', required: true },
@@ -57,6 +99,12 @@ const saleSchema = new Schema<ISale>(
     invoiceNumber: { type: String, required: true, unique: true },
     customerId: { type: Schema.Types.ObjectId, ref: 'Customer' },
     items: [saleItemSchema],
+    isExchange: { type: Boolean, default: false },
+    returnedItems: [returnItemSchema],
+    returnCreditTotal: { type: Number, default: 0, min: 0 },
+    netAmount: { type: Number, default: 0 },
+    refundAmount: { type: Number, default: 0, min: 0 },
+    refundMethod: { type: String },
     subtotal: { type: Number, required: true, min: 0 },
     taxTotal: { type: Number, required: true, default: 0, min: 0 },
     discount: { type: Number, required: true, default: 0, min: 0 },

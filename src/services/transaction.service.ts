@@ -67,49 +67,107 @@ export class TransactionService {
       const dueAmount = Math.max(0, grandTotal - paidAmount);
       const companyId = input.companyId;
       const branchId = input.branchId;
+      const isExchange = Boolean(input.isExchange || (input.returnedItems && input.returnedItems.length > 0));
+      const returnCreditTotal = input.returnCreditTotal || 0;
+      const netAmount = input.netAmount !== undefined ? input.netAmount : (grandTotal - returnCreditTotal);
+      const refundAmount = input.refundAmount || (netAmount < 0 ? Math.abs(netAmount) : 0);
+      const refundMethod = input.refundMethod;
 
-      // Deduct stock for each sold item and stage stock ledger records
       const ledgerEntries: any[] = [];
-      for (const item of input.items) {
-        const product = await Product.findById(item.productId).session(session);
-        if (!product) continue;
-        const previousStock = product.stock;
-        let matchedVariantId: any = undefined;
-        if (product.hasVariants && product.variants?.length) {
-          const matchedVariant = product.variants.find(
-            (v: any) => v.sku === item.variantSku || (v.size === item.selectedSize && v.color === item.selectedColor)
-          );
-          if (matchedVariant) {
-            matchedVariantId = (matchedVariant as any)._id;
-            matchedVariant.stock = Math.max(0, matchedVariant.stock - item.quantity);
+
+      // 1. Deduct stock for each sold item and stage stock ledger records
+      if (input.items && input.items.length > 0) {
+        for (const item of input.items) {
+          const product = await Product.findById(item.productId).session(session);
+          if (!product) continue;
+          const previousStock = product.stock;
+          let matchedVariantId: any = undefined;
+          if (product.hasVariants && product.variants?.length) {
+            const matchedVariant = product.variants.find(
+              (v: any) => v.sku === item.variantSku || (v.size === item.selectedSize && v.color === item.selectedColor)
+            );
+            if (matchedVariant) {
+              matchedVariantId = (matchedVariant as any)._id;
+              matchedVariant.stock = Math.max(0, matchedVariant.stock - item.quantity);
+            }
+            product.stock = product.variants.reduce((sum: number, v: any) => sum + (v.stock || 0), 0);
+            await product.save({ session });
+          } else {
+            product.stock = Math.max(0, product.stock - item.quantity);
+            await product.save({ session });
           }
-          product.stock = product.variants.reduce((sum: number, v: any) => sum + (v.stock || 0), 0);
-          await product.save({ session });
-        } else {
-          product.stock = Math.max(0, product.stock - item.quantity);
-          await product.save({ session });
+          ledgerEntries.push({
+            companyId,
+            branchId,
+            productId: product._id,
+            variantId: matchedVariantId,
+            action: 'sale_out',
+            quantity: item.quantity,
+            previousStock,
+            currentStock: product.stock,
+            referenceType: 'Sale',
+            notes: `POS Checkout ${invoiceNumber}${item.selectedSize ? ` [${item.selectedSize}]` : ''}`,
+            performedBy: cashierId,
+          });
         }
-        ledgerEntries.push({
-          companyId,
-          branchId,
-          productId: product._id,
-          variantId: matchedVariantId,
-          action: 'sale_out',
-          quantity: item.quantity,
-          previousStock,
-          currentStock: product.stock,
-          referenceType: 'Sale',
-          notes: `POS Checkout ${invoiceNumber}${item.selectedSize ? ` [${item.selectedSize}]` : ''}`,
-          performedBy: cashierId,
-        });
       }
+
+      // 2. Increment stock for restockable returned items
+      if (input.returnedItems && input.returnedItems.length > 0) {
+        for (const rItem of input.returnedItems) {
+          const isRestockable = rItem.condition !== 'damaged_scrap';
+          const product = await Product.findById(rItem.productId).session(session);
+          if (product) {
+            const previousStock = product.stock;
+            let matchedVariantId: any = undefined;
+
+            if (isRestockable) {
+              if (product.hasVariants && product.variants?.length) {
+                const matchedVariant = product.variants.find(
+                  (v: any) => v.sku === rItem.variantSku || (v.size === rItem.selectedSize && v.color === rItem.selectedColor)
+                );
+                if (matchedVariant) {
+                  matchedVariantId = (matchedVariant as any)._id;
+                  matchedVariant.stock += rItem.quantity;
+                }
+                product.stock = product.variants.reduce((sum: number, v: any) => sum + (v.stock || 0), 0);
+                await product.save({ session });
+              } else {
+                product.stock += rItem.quantity;
+                await product.save({ session });
+              }
+            }
+
+            ledgerEntries.push({
+              companyId,
+              branchId,
+              productId: product._id,
+              variantId: matchedVariantId,
+              action: 'return_in',
+              quantity: rItem.quantity,
+              previousStock,
+              currentStock: product.stock,
+              referenceType: 'Sale',
+              notes: `POS ${isExchange ? 'Exchange' : 'Return'} ${isRestockable ? 'Restocked' : 'Quarantined (Damaged)'} ${invoiceNumber}${rItem.originalInvoiceNumber ? ` (Orig: ${rItem.originalInvoiceNumber})` : ''}`,
+              performedBy: cashierId,
+            });
+          }
+        }
+      }
+
       const [sale] = await Sale.create([{
         companyId,
         branchId,
         invoiceNumber,
         customerId: input.customerId || undefined,
-        items: input.items,
-        subtotal: input.subtotal,
+        items: input.items || [],
+        isExchange,
+        returnedItems: input.returnedItems || [],
+        returnCreditTotal,
+        netAmount,
+        refundAmount,
+        refundMethod,
+        subtotal: input.subtotal || 0,
         taxTotal: input.taxTotal || 0,
         discount: input.discount || 0,
         couponDiscount: input.couponDiscount || 0,
@@ -121,6 +179,7 @@ export class TransactionService {
         cashierId,
         saleDate: input.saleDate ? new Date(input.saleDate) : new Date(),
       }], { session });
+
       // Link referenceId to newly created sale and insert ledger records within transaction
       if (ledgerEntries.length > 0) {
         const finalizedLedger = ledgerEntries.map((l) => ({ ...l, referenceId: sale._id }));
@@ -147,7 +206,7 @@ export class TransactionService {
         const [cashierUser, customerUser, productItems] = await Promise.all([
           User.findById(cashierId).select('name').lean(),
           input.customerId ? Customer.findById(input.customerId).select('name phone').lean() : null,
-          Product.find({ _id: { $in: input.items.map((i: any) => i.productId) } }).select('name sku').lean(),
+          Product.find({ _id: { $in: (input.items || []).map((i: any) => i.productId) } }).select('name sku').lean(),
         ]);
 
         const cashierName = cashierUser?.name || 'Staff Member';
@@ -166,8 +225,12 @@ export class TransactionService {
           subtotal: sale.subtotal,
           discount: sale.discount,
           tax: sale.taxTotal,
+          isExchange: sale.isExchange,
+          returnCreditTotal: sale.returnCreditTotal,
+          netAmount: sale.netAmount,
+          refundAmount: sale.refundAmount,
           paymentMethod: sale.paymentMethod,
-          itemCount: sale.items?.length || 0,
+          itemCount: (sale.items?.length || 0) + (sale.returnedItems?.length || 0),
           items: (sale.items || []).map((item: any) => {
             const p = itemMap.get(item.productId?.toString());
             return {
@@ -180,22 +243,23 @@ export class TransactionService {
               sku: p?.sku,
             };
           }),
+          returnedItems: sale.returnedItems || [],
           timestamp: sale.saleDate || new Date().toISOString(),
           isRead: false,
         };
 
-        // Create persistent global Notification record for company
         await Notification.create({
           companyId,
           branchId,
-          title: 'Live POS Sale Completed',
-          message: `Sale ${sale.invoiceNumber} (₹${sale.grandTotal.toLocaleString()}) recorded by ${cashierName}`,
+          title: isExchange ? 'Live POS Exchange & Sale Completed' : 'Live POS Sale Completed',
+          message: isExchange 
+            ? `Exchange ${sale.invoiceNumber} (Net: ₹${(sale.netAmount || 0).toLocaleString()}) recorded by ${cashierName}`
+            : `Sale ${sale.invoiceNumber} (₹${sale.grandTotal.toLocaleString()}) recorded by ${cashierName}`,
           type: 'sale',
           isGlobal: true,
           actionUrl: '/transactions',
         });
 
-        // Broadcast to all company connected devices (Admin, Managers, Terminals)
         sseManager.broadcastCompanyEvent(companyId.toString(), 'new_sale', notificationPayload);
       } catch (broadcastErr) {
         console.error('Error broadcasting sale notification:', broadcastErr);
