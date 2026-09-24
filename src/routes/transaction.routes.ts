@@ -25,6 +25,7 @@ router.post('/credit-sales/:id/payment', authorize('credit:write'), transactionC
 // ─── Expenses ─────────────────────────────────────────────────────────────────
 router.get('/expenses', authorize('expenses:read'), transactionController.getExpenses);
 router.post('/expenses', authorize('expenses:create'), transactionController.createExpense);
+router.delete('/expenses/:id', authorize('expenses:create'), transactionController.deleteExpense);
 
 // ─── Inventory ────────────────────────────────────────────────────────────────
 router.get('/inventory/ledger', authorize('inventory:read'), transactionController.getStockLedger);

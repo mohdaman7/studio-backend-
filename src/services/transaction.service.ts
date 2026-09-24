@@ -178,12 +178,12 @@ export class TransactionService {
         notes: input.notes,
         cashierId,
         saleDate: input.saleDate ? new Date(input.saleDate) : new Date(),
-      }], { session });
+      }], { session, ordered: true });
 
       // Link referenceId to newly created sale and insert ledger records within transaction
       if (ledgerEntries.length > 0) {
         const finalizedLedger = ledgerEntries.map((l) => ({ ...l, referenceId: sale._id }));
-        await StockLedger.create(finalizedLedger, { session });
+        await StockLedger.insertMany(finalizedLedger, { session, ordered: true });
       }
 
       if (input.paymentMethod === 'credit' && input.customerId) {
@@ -196,7 +196,7 @@ export class TransactionService {
           paidAmount: paidAmount,
           dueAmount: grandTotal - paidAmount,
           dueDate: input.dueDate ? new Date(input.dueDate) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-        }], { session });
+        }], { session, ordered: true });
       }
 
       await session.commitTransaction();
@@ -319,7 +319,7 @@ export class TransactionService {
           referenceId: sale._id,
           notes: `Stock Restored on Sale Cancelled: ${sale.invoiceNumber}`,
           performedBy: userId,
-        }], { session });
+        }], { session, ordered: true });
       }
       // If credit sale was linked, clear due amount
       await CreditSale.updateMany(
@@ -392,7 +392,7 @@ export class TransactionService {
           currentStock: product.stock,
           referenceType: 'Purchase',
           performedBy: userId,
-        }], { session });
+        }], { session, ordered: true });
       }
 
       const [purchase] = await Purchase.create([{
@@ -413,7 +413,7 @@ export class TransactionService {
         notes: input.notes,
         receivedBy: userId,
         purchaseDate: input.purchaseDate ? new Date(input.purchaseDate) : new Date(),
-      }], { session });
+      }], { session, ordered: true });
 
       await session.commitTransaction();
       return purchase;
@@ -505,6 +505,13 @@ export class TransactionService {
       paymentMethod: input.paymentMethod || 'cash',
       createdBy: userId,
     });
+  }
+
+  async deleteExpense(id: string, userId: string) {
+    const expense = await Expense.findById(id);
+    if (!expense) throw new AppError('Expense record not found', 404);
+    await Expense.findByIdAndDelete(id);
+    return { id };
   }
 
   // ─── Inventory Adjustments ──────────────────────────────────────────────────

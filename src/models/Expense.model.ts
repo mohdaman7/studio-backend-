@@ -16,8 +16,8 @@ export interface IExpense extends Document {
 
 const expenseSchema = new Schema<IExpense>(
   {
-    companyId: { type: Schema.Types.ObjectId, ref: 'Company', required: true },
-    branchId: { type: Schema.Types.ObjectId, ref: 'Branch', required: true },
+    companyId: { type: Schema.Types.ObjectId, ref: 'Company', required: false },
+    branchId: { type: Schema.Types.ObjectId, ref: 'Branch', required: false },
     title: { type: String, required: true, trim: true },
     amount: { type: Number, required: true, min: 0 },
     category: { type: String, required: true, trim: true },
@@ -30,6 +30,7 @@ const expenseSchema = new Schema<IExpense>(
 );
 
 expenseSchema.index({ companyId: 1, branchId: 1 });
+expenseSchema.index({ date: -1 });
 expenseSchema.index({ createdAt: -1 });
 
 export const Expense = mongoose.model<IExpense>('Expense', expenseSchema);

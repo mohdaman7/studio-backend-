@@ -93,6 +93,13 @@ export const getExpenses = asyncHandler(async (req: Request, res: Response) => {
   return ApiResponse.paginated(res, 'Expenses fetched successfully', result.data, result.page, result.limit, result.total);
 });
 
+export const deleteExpense = asyncHandler(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const userId = (req.user as any)?.userId || '';
+  const result = await transactionService.deleteExpense(String(id), userId);
+  return ApiResponse.success(res, 'Expense deleted successfully', result);
+});
+
 // ─── Inventory ────────────────────────────────────────────────────────────────
 export const adjustInventory = asyncHandler(async (req: Request, res: Response) => {
   const validated = inventoryAdjustSchema.parse({
