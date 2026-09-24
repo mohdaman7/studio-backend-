@@ -373,26 +373,30 @@ export class TransactionService {
       const companyId = input.companyId;
       const branchId = input.branchId;
 
-      // Add stock for each received item
-      for (const item of input.items) {
-        const product = await Product.findById(item.productId).session(session);
-        if (!product) throw new AppError(`Product ${item.productId} not found`, 404);
+      // Add stock for each received item if product is specified
+      if (Array.isArray(input.items) && input.items.length > 0) {
+        for (const item of input.items) {
+          if (item.productId) {
+            const product = await Product.findById(item.productId).session(session);
+            if (product) {
+              const prevStock = product.stock;
+              product.stock += item.quantity || 1;
+              await product.save({ session });
 
-        const prevStock = product.stock;
-        product.stock += item.quantity;
-        await product.save({ session });
-
-        await StockLedger.create([{
-          companyId,
-          branchId,
-          productId: product._id,
-          action: 'purchase_in',
-          quantity: item.quantity,
-          previousStock: prevStock,
-          currentStock: product.stock,
-          referenceType: 'Purchase',
-          performedBy: userId,
-        }], { session, ordered: true });
+              await StockLedger.create([{
+                companyId,
+                branchId,
+                productId: product._id,
+                action: 'purchase_in',
+                quantity: item.quantity || 1,
+                previousStock: prevStock,
+                currentStock: product.stock,
+                referenceType: 'Purchase',
+                performedBy: userId,
+              }], { session, ordered: true });
+            }
+          }
+        }
       }
 
       const [purchase] = await Purchase.create([{

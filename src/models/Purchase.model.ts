@@ -39,10 +39,10 @@ export interface IPurchase extends Document {
 }
 
 const purchaseItemSchema = new Schema<IPurchaseItem>({
-  productId: { type: Schema.Types.ObjectId, ref: 'Product', required: true },
+  productId: { type: Schema.Types.ObjectId, ref: 'Product' },
   variantId: { type: Schema.Types.ObjectId },
-  productName: { type: String, required: true },
-  sku: { type: String, required: true },
+  productName: { type: String, default: 'General Stock / Inward Bill' },
+  sku: { type: String, default: 'GEN-PURCHASE' },
   quantity: { type: Number, required: true, min: 1 },
   unitCost: { type: Number, required: true, min: 0 },
   taxRate: { type: Number, default: 0, min: 0 },

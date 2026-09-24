@@ -44,15 +44,15 @@ const returnItemSchema = z.object({
 }));
 
 const purchaseItemSchema = z.object({
-  productId: z.string().regex(objectIdRegex, 'Invalid product ID'),
+  productId: z.string().regex(objectIdRegex, 'Invalid product ID').optional(),
   variantId: z.string().regex(objectIdRegex).optional(),
-  productName: z.string().min(1),
-  sku: z.string().min(1),
-  quantity: z.number().int().positive(),
-  unitCost: z.number().nonnegative(),
+  productName: z.string().optional().default('General Stock / Inward Bill'),
+  sku: z.string().optional().default('GEN-PURCHASE'),
+  quantity: z.number().int().positive().optional().default(1),
+  unitCost: z.number().nonnegative().optional().default(0),
   taxRate: z.number().nonnegative().default(0),
   taxAmount: z.number().nonnegative().default(0),
-  totalAmount: z.number().nonnegative(),
+  totalAmount: z.number().nonnegative().optional().default(0),
 });
 
 export const createSaleSchema = z.object({
@@ -85,7 +85,7 @@ export const createPurchaseSchema = z.object({
   companyId: z.string().regex(objectIdRegex).optional(),
   branchId: z.string().regex(objectIdRegex).optional(),
   supplierId: z.string().regex(objectIdRegex).optional(),
-  items: z.array(purchaseItemSchema).min(1, 'At least one item is required'),
+  items: z.array(purchaseItemSchema).optional().default([]),
   subtotal: z.number().nonnegative(),
   taxTotal: z.number().nonnegative().default(0),
   shippingCost: z.number().nonnegative().default(0),
