@@ -406,8 +406,8 @@ export class TransactionService {
         shippingCost: input.shippingCost || 0,
         discount: input.discount || 0,
         grandTotal: input.grandTotal,
-        paidAmount: input.paidAmount || input.grandTotal,
-        dueAmount: Math.max(0, input.grandTotal - (input.paidAmount || input.grandTotal)),
+        paidAmount: input.paidAmount !== undefined && input.paidAmount !== null ? Number(input.paidAmount) : input.grandTotal,
+        dueAmount: Math.max(0, input.grandTotal - (input.paidAmount !== undefined && input.paidAmount !== null ? Number(input.paidAmount) : input.grandTotal)),
         paymentMethod: input.paymentMethod || 'cash',
         status: 'received',
         notes: input.notes,
@@ -423,6 +423,77 @@ export class TransactionService {
     } finally {
       session.endSession();
     }
+  }
+
+  async recordPurchasePayment(req: Request) {
+    const { id } = req.params;
+    const { amount, paymentMethod = 'cash', note } = req.body;
+    const paymentAmt = Number(amount);
+    if (!paymentAmt || paymentAmt <= 0) {
+      throw new AppError('Payment amount must be greater than 0', 400);
+    }
+
+    const purchase = await Purchase.findById(id);
+    if (!purchase) throw new AppError('Purchase record not found', 404);
+
+    if (purchase.dueAmount <= 0) {
+      throw new AppError('This purchase order is already fully paid', 400);
+    }
+
+    const actualPay = Math.min(paymentAmt, purchase.dueAmount);
+    purchase.paidAmount += actualPay;
+    purchase.dueAmount = Math.max(0, purchase.dueAmount - actualPay);
+    if (note) {
+      purchase.notes = purchase.notes ? `${purchase.notes} | Paid ₹${actualPay} via ${paymentMethod}: ${note}` : `Paid ₹${actualPay} via ${paymentMethod}: ${note}`;
+    }
+    await purchase.save();
+    return purchase;
+  }
+
+  async settleSupplierPayment(req: Request) {
+    const { id: supplierId } = req.params;
+    const { amount, paymentMethod = 'cash', note } = req.body;
+    const companyId = (req.user as any)?.companyId;
+    let paymentAmt = Number(amount);
+
+    if (!paymentAmt || paymentAmt <= 0) {
+      throw new AppError('Payment amount must be greater than 0', 400);
+    }
+
+    const filter: any = {
+      supplierId: new mongoose.Types.ObjectId(String(supplierId)),
+      dueAmount: { $gt: 0 },
+    };
+    if (companyId) filter.companyId = new mongoose.Types.ObjectId(companyId);
+
+    const pendingPurchases = await Purchase.find(filter).sort({ purchaseDate: 1 });
+    if (pendingPurchases.length === 0) {
+      throw new AppError('No pending dues found for this supplier', 400);
+    }
+
+    let remainingPayment = paymentAmt;
+    const updatedPurchases = [];
+
+    for (const purchase of pendingPurchases) {
+      if (remainingPayment <= 0) break;
+      const payTowardsThis = Math.min(remainingPayment, purchase.dueAmount);
+      purchase.paidAmount += payTowardsThis;
+      purchase.dueAmount = Math.max(0, purchase.dueAmount - payTowardsThis);
+      if (note) {
+        purchase.notes = purchase.notes
+          ? `${purchase.notes} | Supplier payment ₹${payTowardsThis} (${paymentMethod}): ${note}`
+          : `Supplier payment ₹${payTowardsThis} (${paymentMethod}): ${note}`;
+      }
+      await purchase.save();
+      updatedPurchases.push(purchase);
+      remainingPayment -= payTowardsThis;
+    }
+
+    return {
+      totalPaid: paymentAmt - remainingPayment,
+      settledPurchasesCount: updatedPurchases.length,
+      updatedPurchases,
+    };
   }
 
   // ─── Credit Sales ───────────────────────────────────────────────────────────

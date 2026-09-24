@@ -62,6 +62,16 @@ export const getPurchases = asyncHandler(async (req: Request, res: Response) => 
   return ApiResponse.paginated(res, 'Purchases fetched successfully', result.data, result.page, result.limit, result.total);
 });
 
+export const recordPurchasePayment = asyncHandler(async (req: Request, res: Response) => {
+  const result = await transactionService.recordPurchasePayment(req);
+  return ApiResponse.success(res, 'Purchase payment recorded successfully', result);
+});
+
+export const settleSupplierPayment = asyncHandler(async (req: Request, res: Response) => {
+  const result = await transactionService.settleSupplierPayment(req);
+  return ApiResponse.success(res, 'Supplier dues payment recorded successfully', result);
+});
+
 // ─── Credit Sales ─────────────────────────────────────────────────────────────
 export const createCreditSale = asyncHandler(async (req: Request, res: Response) => {
   const result = await transactionService.createCreditSale(req);

@@ -17,6 +17,8 @@ router.patch('/sales/:id/cancel', authorize('sales:delete'), transactionControll
 // ─── Purchases ────────────────────────────────────────────────────────────────
 router.get('/purchases', authorize('purchases:read'), transactionController.getPurchases);
 router.post('/purchases', authorize('purchases:create'), transactionController.createPurchase);
+router.post('/purchases/:id/payment', transactionController.recordPurchasePayment);
+router.post('/suppliers/:id/settle-dues', transactionController.settleSupplierPayment);
 
 // ─── Credit Sales ─────────────────────────────────────────────────────────────
 router.get('/credit-sales', authorize('credit:read'), transactionController.getCreditSales);
