@@ -426,6 +426,86 @@ export class TransactionService {
   }
 
   // ─── Credit Sales ───────────────────────────────────────────────────────────
+  async createCreditSale(req: Request) {
+    const companyId = (req.user as any)?.companyId;
+    const userId = (req.user as any)?.id || (req.user as any)?._id;
+    const {
+      customerName,
+      customerPhone,
+      customerEmail,
+      customerId: providedCustomerId,
+      amount,
+      paidAmount = 0,
+      dueDate,
+      invoiceNumber,
+      notes,
+      creditDate,
+    } = req.body;
+
+    if (!amount || Number(amount) <= 0) {
+      throw new AppError('Credit amount must be greater than 0', 400);
+    }
+
+    let customerId = providedCustomerId;
+    if (!customerId) {
+      const cleanPhone = String(customerPhone || '').trim();
+      const cleanName = String(customerName || 'Previous Credit Customer').trim();
+      if (!cleanPhone) {
+        throw new AppError('Customer phone number is required', 400);
+      }
+
+      let existingCust = await Customer.findOne({
+        companyId: new mongoose.Types.ObjectId(companyId),
+        phone: cleanPhone,
+      });
+
+      if (!existingCust) {
+        existingCust = await Customer.create({
+          companyId: new mongoose.Types.ObjectId(companyId),
+          name: cleanName,
+          phone: cleanPhone,
+          email: customerEmail?.trim() || undefined,
+          loyaltyPoints: 0,
+          isActive: true,
+        });
+      }
+      customerId = existingCust._id;
+    }
+
+    const totalCredit = Number(amount);
+    const initialPaid = Number(paidAmount) || 0;
+    const due = Math.max(0, totalCredit - initialPaid);
+    const invNum = invoiceNumber?.trim() || `CR-PREV-${Math.floor(100000 + Math.random() * 900000)}`;
+    const dueD = dueDate ? new Date(dueDate) : new Date(Date.now() + 15 * 86400000);
+    const createdD = creditDate ? new Date(creditDate) : new Date();
+
+    const paymentLogs: any[] = [];
+    if (initialPaid > 0) {
+      paymentLogs.push({
+        amount: initialPaid,
+        paymentMethod: 'cash',
+        paidAt: createdD,
+        receivedBy: new mongoose.Types.ObjectId(userId),
+      });
+    }
+
+    const record = await CreditSale.create({
+      companyId: new mongoose.Types.ObjectId(companyId),
+      customerId: new mongoose.Types.ObjectId(customerId),
+      invoiceNumber: invNum,
+      notes: notes?.trim() || 'Previous existing customer credit balance',
+      totalCreditAmount: totalCredit,
+      paidAmount: initialPaid,
+      dueAmount: due,
+      dueDate: dueD,
+      status: due === 0 ? 'settled' : 'active',
+      paymentLogs,
+      createdAt: createdD,
+    });
+
+    return record.populate('customerId', 'name phone');
+  }
+
   async getCreditSales(req: Request) {
     const page = parseInt((req.query.page as string) || '1', 10);
     const limit = parseInt((req.query.limit as string) || '20', 10);

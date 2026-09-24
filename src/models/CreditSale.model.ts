@@ -11,9 +11,11 @@ export interface ICreditPaymentLog {
 
 export interface ICreditSale extends Document {
   companyId: Types.ObjectId;
-  branchId: Types.ObjectId;
+  branchId?: Types.ObjectId;
   customerId: Types.ObjectId;
-  saleId: Types.ObjectId;
+  saleId?: Types.ObjectId;
+  invoiceNumber?: string;
+  notes?: string;
   totalCreditAmount: number;
   paidAmount: number;
   dueAmount: number;
@@ -34,9 +36,11 @@ const creditPaymentLogSchema = new Schema<ICreditPaymentLog>({
 const creditSaleSchema = new Schema<ICreditSale>(
   {
     companyId: { type: Schema.Types.ObjectId, ref: 'Company', required: true },
-    branchId: { type: Schema.Types.ObjectId, ref: 'Branch', required: true },
+    branchId: { type: Schema.Types.ObjectId, ref: 'Branch', required: false },
     customerId: { type: Schema.Types.ObjectId, ref: 'Customer', required: true },
-    saleId: { type: Schema.Types.ObjectId, ref: 'Sale', required: true },
+    saleId: { type: Schema.Types.ObjectId, ref: 'Sale', required: false },
+    invoiceNumber: { type: String, required: false, trim: true },
+    notes: { type: String, default: '', trim: true },
     totalCreditAmount: { type: Number, required: true },
     paidAmount: { type: Number, required: true, default: 0 },
     dueAmount: { type: Number, required: true },

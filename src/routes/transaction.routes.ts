@@ -20,6 +20,7 @@ router.post('/purchases', authorize('purchases:create'), transactionController.c
 
 // ─── Credit Sales ─────────────────────────────────────────────────────────────
 router.get('/credit-sales', authorize('credit:read'), transactionController.getCreditSales);
+router.post('/credit-sales', transactionController.createCreditSale);
 router.post('/credit-sales/:id/payment', authorize('credit:write'), transactionController.recordCreditPayment);
 
 // ─── Expenses ─────────────────────────────────────────────────────────────────

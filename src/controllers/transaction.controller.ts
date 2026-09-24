@@ -63,6 +63,11 @@ export const getPurchases = asyncHandler(async (req: Request, res: Response) => 
 });
 
 // ─── Credit Sales ─────────────────────────────────────────────────────────────
+export const createCreditSale = asyncHandler(async (req: Request, res: Response) => {
+  const result = await transactionService.createCreditSale(req);
+  return ApiResponse.created(res, 'Credit sale record created successfully', result);
+});
+
 export const getCreditSales = asyncHandler(async (req: Request, res: Response) => {
   const result = await transactionService.getCreditSales(req);
   return ApiResponse.paginated(res, 'Credit sales fetched successfully', result.data, result.page, result.limit, result.total);
