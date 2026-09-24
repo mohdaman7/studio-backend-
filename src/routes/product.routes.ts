@@ -12,6 +12,8 @@ router.use(authenticate);
 router.get('/products', authorize('product:read'), productController.getProducts);
 router.get('/products/:id', authorize('product:read'), productController.getProductById);
 router.get('/products/barcode/:barcode', authorize('product:read'), productController.getProductByBarcode);
+router.post('/products/bulk-cost-update', authorize('product:update'), productController.bulkCostUpdate);
+router.put('/products/batch-cost-update', authorize('product:update'), productController.batchCostUpdate);
 router.post('/products', authorize('product:create'), productController.createProduct);
 router.put('/products/:id', authorize('product:update'), productController.updateProduct);
 router.delete('/products/:id', authorize('product:delete'), productController.deleteProduct);

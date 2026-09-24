@@ -120,7 +120,89 @@ export class ProductService {
       .lean()
       .exec();
   }
+
+  async bulkCostUpdate(req: Request) {
+    const { brandId, brandName, categoryId, categoryName, costMode, value, onlyZeroCost } = req.body;
+    const companyId = (req.user as any)?.companyId;
+
+    const filter: any = { isActive: true };
+    if (companyId) filter.companyId = new mongoose.Types.ObjectId(companyId);
+    
+    if (brandId) {
+      filter.brandId = new mongoose.Types.ObjectId(brandId);
+    }
+    if (categoryId) {
+      filter.categoryId = new mongoose.Types.ObjectId(categoryId);
+    }
+    if (onlyZeroCost) {
+      filter.costPrice = { $in: [0, null] };
+    }
+
+    const products = await Product.find(filter).exec();
+    let updatedCount = 0;
+
+    const bulkOps = [];
+    for (const prod of products) {
+      let targetCost = 0;
+      const retailPrice = Number(prod.price || prod.mrp || 0);
+
+      if (costMode === 'fixed') {
+        targetCost = Math.max(0, Number(value || 0));
+      } else if (costMode === 'percentage') {
+        // e.g. 60% of retail price
+        targetCost = Math.round(retailPrice * (Number(value || 0) / 100));
+      } else if (costMode === 'margin_diff') {
+        // e.g. retail price minus 100
+        targetCost = Math.max(0, retailPrice - Number(value || 0));
+      } else {
+        targetCost = Math.max(0, Number(value || 0));
+      }
+
+      bulkOps.push({
+        updateOne: {
+          filter: { _id: prod._id },
+          update: {
+            $set: {
+              costPrice: targetCost,
+              'variants.$[].costPrice': targetCost,
+              updatedAt: new Date(),
+            },
+          },
+        },
+      });
+    }
+
+    if (bulkOps.length > 0) {
+      const res = await Product.bulkWrite(bulkOps);
+      updatedCount = res.modifiedCount || bulkOps.length;
+    }
+
+    return { updatedCount, totalMatched: products.length };
+  }
+
+  async batchCostUpdate(req: Request) {
+    const { updates } = req.body;
+    if (!Array.isArray(updates) || updates.length === 0) {
+      return { updatedCount: 0 };
+    }
+
+    const bulkOps = updates.map((u: { id: string; costPrice: number }) => ({
+      updateOne: {
+        filter: { _id: new mongoose.Types.ObjectId(u.id) },
+        update: {
+          $set: {
+            costPrice: Math.max(0, Number(u.costPrice || 0)),
+            'variants.$[].costPrice': Math.max(0, Number(u.costPrice || 0)),
+            updatedAt: new Date(),
+          },
+        },
+      },
+    }));
+
+    const res = await Product.bulkWrite(bulkOps);
+    return { updatedCount: res.modifiedCount || bulkOps.length };
+  }
+
 }
 
 export const productService = new ProductService();
-export default productService;

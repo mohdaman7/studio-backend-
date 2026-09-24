@@ -151,3 +151,14 @@ export const deleteCustomer = asyncHandler(async (req: Request, res: Response) =
   await customerService.delete(id);
   return ApiResponse.success(res, 'Customer deleted successfully');
 });
+
+
+export const bulkCostUpdate = asyncHandler(async (req: Request, res: Response) => {
+  const result = await productService.bulkCostUpdate(req);
+  return ApiResponse.success(res, 'Products cost updated successfully', result);
+});
+
+export const batchCostUpdate = asyncHandler(async (req: Request, res: Response) => {
+  const result = await productService.batchCostUpdate(req);
+  return ApiResponse.success(res, 'Batch costs updated successfully', result);
+});
