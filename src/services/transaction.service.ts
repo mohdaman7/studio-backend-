@@ -477,16 +477,33 @@ export class TransactionService {
   // ─── Expenses ───────────────────────────────────────────────────────────────
   async getAllExpenses(req: Request) {
     const page = parseInt((req.query.page as string) || '1', 10);
-    const limit = parseInt((req.query.limit as string) || '20', 10);
+    const limit = parseInt((req.query.limit as string) || '50', 10);
     const skip = (page - 1) * limit;
     const companyId = (req.user as any)?.companyId;
 
     const filter: any = {};
-    if (companyId) filter.companyId = new mongoose.Types.ObjectId(companyId);
-    if (req.query.category) filter.category = req.query.category;
+    if (companyId) {
+      filter.$or = [
+        { companyId: new mongoose.Types.ObjectId(companyId) },
+        { companyId: { $exists: false } },
+        { companyId: null },
+      ];
+    }
+    if (req.query.category && req.query.category !== 'all') {
+      filter.category = req.query.category;
+    }
+    if (req.query.paymentMethod && req.query.paymentMethod !== 'all') {
+      filter.paymentMethod = req.query.paymentMethod;
+    }
 
     const [data, total] = await Promise.all([
-      Expense.find(filter).sort({ date: -1 }).skip(skip).limit(limit).populate('createdBy', 'name').lean().exec(),
+      Expense.find(filter)
+        .sort({ date: -1, createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate('createdBy', 'name')
+        .lean()
+        .exec(),
       Expense.countDocuments(filter).exec(),
     ]);
 
