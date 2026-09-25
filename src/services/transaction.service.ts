@@ -38,6 +38,8 @@ export class TransactionService {
         .limit(limit)
         .populate('customerId', 'name phone')
         .populate('cashierId', 'name')
+        .populate('items.productId', 'name sku category subCategory brand')
+        .populate('returnedItems.productId', 'name sku category subCategory brand')
         .lean()
         .exec(),
       Sale.countDocuments(filter).exec(),
@@ -473,6 +475,8 @@ export class TransactionService {
     const updated = await Sale.findById(sale._id)
       .populate('customerId', 'name phone email')
       .populate('cashierId', 'name')
+        .populate('items.productId', 'name sku category subCategory brand')
+        .populate('returnedItems.productId', 'name sku category subCategory brand')
       .lean();
 
     return updated;
