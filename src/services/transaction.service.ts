@@ -404,6 +404,80 @@ export class TransactionService {
     }
   }
 
+
+  async updateSale(id: string, input: any, userId: string) {
+    const sale = await Sale.findById(id);
+    if (!sale) throw new AppError('Sale not found', 404);
+
+    // 1. Update Customer assignment
+    if (input.customerId !== undefined) {
+      if (!input.customerId || input.customerId === 'walkin' || input.customerId === 'null') {
+        sale.customerId = undefined;
+      } else {
+        const cust = await Customer.findById(input.customerId);
+        if (cust) {
+          sale.customerId = cust._id as any;
+        }
+      }
+    } else if (input.customerPhone) {
+      const cleanPhone = String(input.customerPhone).trim();
+      const cleanName = String(input.customerName || 'Customer').trim();
+      if (cleanPhone) {
+        let cust = await Customer.findOne({
+          companyId: sale.companyId,
+          phone: cleanPhone,
+        });
+        if (!cust) {
+          cust = await Customer.create({
+            companyId: sale.companyId,
+            name: cleanName,
+            phone: cleanPhone,
+            loyaltyPoints: 0,
+            isActive: true,
+          });
+        } else if (cleanName && cust.name !== cleanName) {
+          cust.name = cleanName;
+          await cust.save();
+        }
+        sale.customerId = cust._id as any;
+      }
+    }
+
+    // 2. Update Payment Method & Pricing
+    if (input.paymentMethod) {
+      sale.paymentMethod = input.paymentMethod;
+    }
+    if (input.paidAmount !== undefined) {
+      sale.paidAmount = Number(input.paidAmount);
+      sale.dueAmount = Math.max(0, (sale.grandTotal || 0) - sale.paidAmount);
+    }
+    if (input.discount !== undefined) {
+      sale.discount = Number(input.discount);
+    }
+    if (input.grandTotal !== undefined) {
+      sale.grandTotal = Number(input.grandTotal);
+      if (input.paidAmount === undefined) {
+        sale.paidAmount = sale.grandTotal;
+        sale.dueAmount = 0;
+      }
+    }
+    if (input.status) {
+      sale.status = input.status;
+    }
+    if (input.notes !== undefined) {
+      sale.notes = input.notes;
+    }
+
+    await sale.save();
+
+    const updated = await Sale.findById(sale._id)
+      .populate('customerId', 'name phone email')
+      .populate('cashierId', 'name')
+      .lean();
+
+    return updated;
+  }
+
   // ─── Purchases ──────────────────────────────────────────────────────────────
   async getAllPurchases(req: Request) {
     const page = parseInt((req.query.page as string) || '1', 10);

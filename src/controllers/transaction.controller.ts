@@ -52,6 +52,14 @@ export const deleteSale = asyncHandler(async (req: Request, res: Response) => {
   return ApiResponse.success(res, 'Invoice deleted successfully', result);
 });
 
+
+export const updateSale = asyncHandler(async (req: Request, res: Response) => {
+  const id = getParamId(req);
+  const userId = (req.user as any)?.userId || (req.user as any)?.id || '';
+  const result = await transactionService.updateSale(id, req.body, userId);
+  return ApiResponse.success(res, 'Invoice updated successfully', result);
+});
+
 // ─── Purchases ───────────────────────────────────────────────────────────────
 export const createPurchase = asyncHandler(async (req: Request, res: Response) => {
   const validated = createPurchaseSchema.parse({
