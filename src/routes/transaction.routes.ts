@@ -22,6 +22,8 @@ router.get('/purchases', authorize('purchases:read'), transactionController.getP
 router.post('/purchases', authorize('purchases:create'), transactionController.createPurchase);
 router.post('/purchases/:id/payment', transactionController.recordPurchasePayment);
 router.post('/suppliers/:id/settle-dues', transactionController.settleSupplierPayment);
+router.patch('/purchases/:id', authorize('purchases:create'), transactionController.updatePurchase);
+router.put('/purchases/:id', authorize('purchases:create'), transactionController.updatePurchase);
 
 // ─── Credit Sales ─────────────────────────────────────────────────────────────
 router.get('/credit-sales', authorize('credit:read'), transactionController.getCreditSales);

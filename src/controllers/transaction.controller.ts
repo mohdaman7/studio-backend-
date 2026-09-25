@@ -87,6 +87,14 @@ export const settleSupplierPayment = asyncHandler(async (req: Request, res: Resp
   return ApiResponse.success(res, 'Supplier dues payment recorded successfully', result);
 });
 
+
+export const updatePurchase = asyncHandler(async (req: Request, res: Response) => {
+  const id = getParamId(req);
+  const userId = (req.user as any)?.userId || (req.user as any)?.id || '';
+  const result = await transactionService.updatePurchase(id, req.body, userId);
+  return ApiResponse.success(res, 'Purchase order updated successfully', result);
+});
+
 // ─── Credit Sales ─────────────────────────────────────────────────────────────
 export const createCreditSale = asyncHandler(async (req: Request, res: Response) => {
   const result = await transactionService.createCreditSale(req);

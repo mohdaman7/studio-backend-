@@ -2,6 +2,7 @@ import { sseManager } from '../utils/sseManager';
 import { Notification } from '../models/Notification.model';
 import { User } from '../models/User.model';
 import { Customer } from '../models/Customer.model';
+import { Supplier } from '../models/Supplier.model';
 import mongoose from 'mongoose';
 import { Sale } from '../models/Sale.model';
 import { Purchase } from '../models/Purchase.model';
@@ -596,6 +597,30 @@ export class TransactionService {
       purchase.notes = purchase.notes ? `${purchase.notes} | Paid ₹${actualPay} via ${paymentMethod}: ${note}` : `Paid ₹${actualPay} via ${paymentMethod}: ${note}`;
     }
     await purchase.save();
+
+    // Automatically create corresponding Expense entry
+    try {
+      let supplierName = 'Supplier';
+      if (purchase.supplierId) {
+        const supp = await Supplier.findById(purchase.supplierId).select('name').lean();
+        if (supp?.name) supplierName = supp.name;
+      }
+      const userId = (req.user as any)?.userId || (req.user as any)?.id || (req.user as any)?._id;
+      await Expense.create({
+        companyId: purchase.companyId,
+        branchId: purchase.branchId,
+        title: `Supplier Payment - ${supplierName} (${purchase.purchaseNumber})`,
+        amount: actualPay,
+        category: 'inventory',
+        date: new Date(),
+        paymentMethod: paymentMethod || 'cash',
+        notes: note ? `Payment towards ${purchase.purchaseNumber}: ${note}` : `Supplier payout for ${purchase.purchaseNumber}`,
+        createdBy: userId,
+      });
+    } catch (expErr) {
+      console.warn('Could not auto-create expense for purchase payment:', expErr);
+    }
+
     return purchase;
   }
 
@@ -643,6 +668,43 @@ export class TransactionService {
       settledPurchasesCount: updatedPurchases.length,
       updatedPurchases,
     };
+  }
+
+
+  async updatePurchase(id: string, input: any, userId: string) {
+    const purchase = await Purchase.findById(id);
+    if (!purchase) throw new AppError('Purchase record not found', 404);
+
+    if (input.supplierId) {
+      purchase.supplierId = new mongoose.Types.ObjectId(String(input.supplierId));
+    }
+    if (input.grandTotal !== undefined) {
+      purchase.grandTotal = Number(input.grandTotal);
+      purchase.subtotal = Number(input.grandTotal);
+    }
+    if (input.paidAmount !== undefined) {
+      purchase.paidAmount = Number(input.paidAmount);
+    }
+    purchase.dueAmount = Math.max(0, (purchase.grandTotal || 0) - (purchase.paidAmount || 0));
+
+    if (input.paymentMethod) {
+      purchase.paymentMethod = input.paymentMethod;
+    }
+    if (input.notes !== undefined) {
+      purchase.notes = input.notes;
+    }
+    if (input.purchaseDate) {
+      purchase.purchaseDate = new Date(input.purchaseDate);
+    }
+
+    await purchase.save();
+
+    const updated = await Purchase.findById(purchase._id)
+      .populate('supplierId', 'name phone')
+      .populate('receivedBy', 'name')
+      .lean();
+
+    return updated;
   }
 
   // ─── Credit Sales ───────────────────────────────────────────────────────────
