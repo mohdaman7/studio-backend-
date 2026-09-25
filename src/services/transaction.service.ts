@@ -337,6 +337,73 @@ export class TransactionService {
     }
   }
 
+  async deleteSale(id: string, userId: string) {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+      const sale = await Sale.findById(id).session(session);
+      if (!sale) throw new AppError('Sale not found', 404);
+
+      // If the sale was completed, restore physical stock for items
+      if (sale.status === 'completed') {
+        for (const item of sale.items) {
+          const product = await Product.findById(item.productId).session(session);
+          if (!product) continue;
+          const prevStock = product.stock;
+          let matchedVariantId = undefined;
+          if (product.hasVariants && product.variants?.length) {
+            const matchedVariant = product.variants.find(
+              (v) =>
+                (item.variantId && v._id?.toString() === item.variantId?.toString()) ||
+                (item.sku && v.sku === item.sku) ||
+                (item.variantSku && v.sku === item.variantSku)
+            );
+            if (matchedVariant) {
+              matchedVariantId = matchedVariant._id;
+              matchedVariant.stock = (matchedVariant.stock || 0) + item.quantity;
+            }
+            product.stock = product.variants.reduce((sum, v) => sum + (v.stock || 0), 0);
+            await product.save({ session });
+          } else {
+            product.stock = (product.stock || 0) + item.quantity;
+            await product.save({ session });
+          }
+          await StockLedger.create([{
+            companyId: sale.companyId,
+            branchId: sale.branchId,
+            productId: product._id,
+            variantId: matchedVariantId,
+            action: 'return_in',
+            quantity: item.quantity,
+            previousStock: prevStock,
+            currentStock: product.stock,
+            referenceType: 'Return',
+            referenceId: sale._id,
+            notes: `Stock Restored on Sale Deletion: ${sale.invoiceNumber}`,
+            performedBy: userId,
+          }], { session, ordered: true });
+        }
+      }
+
+      // If credit sale was linked, delete it
+      await CreditSale.deleteMany(
+        { saleId: sale._id },
+        { session }
+      );
+
+      // Delete the sale document permanently
+      await Sale.findByIdAndDelete(id).session(session);
+
+      await session.commitTransaction();
+      return { success: true, message: `Invoice ${sale.invoiceNumber} deleted permanently` };
+    } catch (err) {
+      await session.abortTransaction();
+      throw err;
+    } finally {
+      session.endSession();
+    }
+  }
+
   // ─── Purchases ──────────────────────────────────────────────────────────────
   async getAllPurchases(req: Request) {
     const page = parseInt((req.query.page as string) || '1', 10);

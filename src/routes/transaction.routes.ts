@@ -13,6 +13,7 @@ router.get('/sales', authorize('sales:read'), transactionController.getSales);
 router.post('/sales', authorize('sales:create'), transactionController.createSale);
 router.get('/sales/:id', authorize('sales:read'), transactionController.getSaleById);
 router.patch('/sales/:id/cancel', authorize('sales:delete'), transactionController.cancelSale);
+router.delete('/sales/:id', authorize('sales:delete'), transactionController.deleteSale);
 
 // ─── Purchases ────────────────────────────────────────────────────────────────
 router.get('/purchases', authorize('purchases:read'), transactionController.getPurchases);
