@@ -96,19 +96,36 @@ export class ProductService {
 
     const prevStock = product.stock;
     const isIn = data.action === 'adjustment_in';
-    product.stock = isIn ? prevStock + data.quantity : Math.max(0, prevStock - data.quantity);
+    const qty = Number(data.quantity) || 1;
+
+    let matchedVariantId: any = undefined;
+    if (product.hasVariants && product.variants?.length) {
+      const vMatch = product.variants.find(
+        (v: any) =>
+          (data.variantId && (v._id?.toString() === data.variantId || v.id === data.variantId)) ||
+          (data.variantSku && v.sku === data.variantSku)
+      );
+      if (vMatch) {
+        matchedVariantId = (vMatch as any)._id;
+        vMatch.stock = isIn ? (vMatch.stock || 0) + qty : Math.max(0, (vMatch.stock || 0) - qty);
+      }
+      product.stock = product.variants.reduce((sum: number, v: any) => sum + (v.stock || 0), 0);
+    } else {
+      product.stock = isIn ? prevStock + qty : Math.max(0, prevStock - qty);
+    }
     await product.save();
 
     await StockLedger.create({
       companyId: data.companyId || product.companyId,
       branchId: data.branchId,
       productId: product._id,
+      variantId: matchedVariantId,
       action: data.action || 'adjustment_in',
-      quantity: data.quantity,
+      quantity: qty,
       previousStock: prevStock,
       currentStock: product.stock,
       referenceType: 'Adjustment',
-      notes: data.notes,
+      notes: data.notes || 'POS auto-stock update',
       performedBy: userId,
     });
 

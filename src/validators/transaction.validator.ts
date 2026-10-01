@@ -116,9 +116,11 @@ export const creditPaymentSchema = z.object({
 
 export const inventoryAdjustSchema = z.object({
   productId: z.string().regex(objectIdRegex, 'Invalid product ID'),
+  variantId: z.string().optional().nullable(),
+  variantSku: z.string().optional().nullable(),
   action: z.enum(['adjustment_in', 'adjustment_out']),
   quantity: z.number().int().positive(),
-  companyId: z.string().regex(objectIdRegex).optional(),
-  branchId: z.string().regex(objectIdRegex).optional(),
+  companyId: z.string().optional().nullable(),
+  branchId: z.string().optional().nullable(),
   notes: z.string().optional(),
 });
