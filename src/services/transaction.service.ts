@@ -516,6 +516,62 @@ export class TransactionService {
 
     await sale.save();
 
+    // 3. Synchronize CreditSale ledger record
+    try {
+      if (sale.dueAmount > 0) {
+        if (!sale.customerId) {
+          const cleanName = (input.customerName || '').trim() || 'Walk-in Customer';
+          const cleanPhone = (input.customerPhone || '').trim();
+          let cust = cleanPhone ? await Customer.findOne({ companyId: sale.companyId, phone: cleanPhone }) : null;
+          if (!cust) {
+            cust = await Customer.create({
+              companyId: sale.companyId,
+              name: cleanName,
+              phone: cleanPhone || `WALK-${String(sale._id).slice(-4)}`,
+              loyaltyPoints: 0,
+              isActive: true,
+            });
+          }
+          sale.customerId = cust._id as any;
+          await sale.save();
+        }
+
+        let creditRecord = await CreditSale.findOne({ saleId: sale._id });
+        if (creditRecord) {
+          creditRecord.totalCreditAmount = sale.grandTotal;
+          creditRecord.paidAmount = sale.paidAmount;
+          creditRecord.dueAmount = sale.dueAmount;
+          creditRecord.status = creditRecord.dueAmount === 0 ? 'settled' : 'active';
+          if (sale.customerId) creditRecord.customerId = sale.customerId;
+          if (sale.invoiceNumber) creditRecord.invoiceNumber = sale.invoiceNumber;
+          await creditRecord.save();
+        } else if (sale.customerId) {
+          await CreditSale.create({
+            companyId: sale.companyId,
+            branchId: sale.branchId,
+            customerId: sale.customerId,
+            saleId: sale._id,
+            invoiceNumber: sale.invoiceNumber,
+            totalCreditAmount: sale.grandTotal,
+            paidAmount: sale.paidAmount,
+            dueAmount: sale.dueAmount,
+            dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+            status: 'active',
+          });
+        }
+      } else if (sale.dueAmount === 0) {
+        const creditRecord = await CreditSale.findOne({ saleId: sale._id });
+        if (creditRecord) {
+          creditRecord.paidAmount = sale.grandTotal;
+          creditRecord.dueAmount = 0;
+          creditRecord.status = 'settled';
+          await creditRecord.save();
+        }
+      }
+    } catch (creditErr) {
+      console.warn(`Failed to sync CreditSale record for sale ${sale._id}:`, creditErr);
+    }
+
     const updated = await Sale.findById(sale._id)
       .populate('customerId', 'name phone email')
       .populate('cashierId', 'name')
