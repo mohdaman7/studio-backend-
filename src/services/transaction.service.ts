@@ -490,19 +490,22 @@ export class TransactionService {
     if (input.paymentMethod) {
       sale.paymentMethod = input.paymentMethod;
     }
-    if (input.paidAmount !== undefined) {
-      sale.paidAmount = Number(input.paidAmount);
-      sale.dueAmount = Math.max(0, (sale.grandTotal || 0) - sale.paidAmount);
-    }
     if (input.discount !== undefined) {
       sale.discount = Number(input.discount);
     }
     if (input.grandTotal !== undefined) {
       sale.grandTotal = Number(input.grandTotal);
-      if (input.paidAmount === undefined) {
-        sale.paidAmount = sale.grandTotal;
-        sale.dueAmount = 0;
-      }
+    }
+    if (input.paidAmount !== undefined) {
+      sale.paidAmount = Number(input.paidAmount);
+    } else if (input.grandTotal !== undefined && input.dueAmount === 0) {
+      sale.paidAmount = sale.grandTotal;
+    }
+
+    if (input.dueAmount !== undefined) {
+      sale.dueAmount = Math.max(0, Number(input.dueAmount));
+    } else {
+      sale.dueAmount = Math.max(0, (sale.grandTotal || 0) - (sale.paidAmount || 0));
     }
     if (input.status) {
       sale.status = input.status;
