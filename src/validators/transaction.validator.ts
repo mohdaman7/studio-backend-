@@ -4,7 +4,7 @@ const objectIdRegex = /^[a-fA-F0-9]{24}$/;
 
 const saleItemSchema = z.object({
   productId: z.string().regex(objectIdRegex, 'Invalid product ID'),
-  variantId: z.string().regex(objectIdRegex).optional(),
+  variantId: z.string().optional().nullable().transform((v) => (v && objectIdRegex.test(v) ? v : undefined)),
   name: z.string().optional(),
   sku: z.string().optional(),
   variantSku: z.string().optional(),
@@ -24,7 +24,7 @@ const saleItemSchema = z.object({
 
 const returnItemSchema = z.object({
   productId: z.string().regex(objectIdRegex, 'Invalid product ID'),
-  variantId: z.string().regex(objectIdRegex).optional(),
+  variantId: z.string().optional().nullable().transform((v) => (v && objectIdRegex.test(v) ? v : undefined)),
   name: z.string().optional(),
   sku: z.string().optional(),
   variantSku: z.string().optional(),
@@ -56,9 +56,9 @@ const purchaseItemSchema = z.object({
 });
 
 export const createSaleSchema = z.object({
-  companyId: z.string().regex(objectIdRegex).optional(),
-  branchId: z.string().regex(objectIdRegex).optional(),
-  customerId: z.string().regex(objectIdRegex).optional(),
+  companyId: z.string().optional().nullable().transform((c) => (c && objectIdRegex.test(c) ? c : undefined)),
+  branchId: z.string().optional().nullable().transform((b) => (b && objectIdRegex.test(b) ? b : undefined)),
+  customerId: z.string().optional().nullable().transform((c) => (c && objectIdRegex.test(c) ? c : undefined)),
   items: z.array(saleItemSchema).default([]),
   isExchange: z.boolean().default(false),
   returnedItems: z.array(returnItemSchema).default([]),
@@ -72,7 +72,7 @@ export const createSaleSchema = z.object({
   couponDiscount: z.number().nonnegative().default(0),
   grandTotal: z.number().nonnegative().default(0),
   paidAmount: z.number().nonnegative().default(0),
-  paymentMethod: z.enum(['cash', 'card', 'upi', 'credit', 'mixed']).default('cash'),
+  paymentMethod: z.enum(['cash', 'card', 'upi', 'credit', 'mixed', 'split']).default('cash'),
   notes: z.string().optional(),
   saleDate: z.string().optional(),
   dueDate: z.string().optional(),

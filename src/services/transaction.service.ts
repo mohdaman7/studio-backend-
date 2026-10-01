@@ -91,11 +91,51 @@ export class TransactionService {
             );
             if (matchedVariant) {
               matchedVariantId = (matchedVariant as any)._id;
+
+              // AUTO-RECONCILIATION: If physical stock was detected and sold at counter, auto-adjust deficit before sale
+              if (matchedVariant.stock < item.quantity) {
+                const deficit = item.quantity - matchedVariant.stock;
+                const beforeStock = matchedVariant.stock;
+                matchedVariant.stock += deficit;
+                ledgerEntries.push({
+                  companyId,
+                  branchId,
+                  productId: product._id,
+                  variantId: matchedVariantId,
+                  action: 'adjustment_in',
+                  quantity: deficit,
+                  previousStock: beforeStock,
+                  currentStock: matchedVariant.stock,
+                  referenceType: 'Adjustment',
+                  notes: `Counter Stock Auto-Reconciled (+${deficit} found at POS checkout) ${invoiceNumber}`,
+                  performedBy: cashierId,
+                });
+              }
+
               matchedVariant.stock = Math.max(0, matchedVariant.stock - item.quantity);
             }
             product.stock = product.variants.reduce((sum: number, v: any) => sum + (v.stock || 0), 0);
             await product.save({ session });
           } else {
+            // AUTO-RECONCILIATION for non-variant product
+            if (product.stock < item.quantity) {
+              const deficit = item.quantity - product.stock;
+              const beforeStock = product.stock;
+              product.stock += deficit;
+              ledgerEntries.push({
+                companyId,
+                branchId,
+                productId: product._id,
+                action: 'adjustment_in',
+                quantity: deficit,
+                previousStock: beforeStock,
+                currentStock: product.stock,
+                referenceType: 'Adjustment',
+                notes: `Counter Stock Auto-Reconciled (+${deficit} found at POS checkout) ${invoiceNumber}`,
+                performedBy: cashierId,
+              });
+            }
+
             product.stock = Math.max(0, product.stock - item.quantity);
             await product.save({ session });
           }

@@ -1,6 +1,6 @@
 import mongoose, { Schema, Document, Types } from 'mongoose';
 
-export type PaymentMethod = 'cash' | 'card' | 'upi' | 'credit' | 'mixed';
+export type PaymentMethod = 'cash' | 'card' | 'upi' | 'credit' | 'mixed' | 'split';
 export type SaleStatus = 'completed' | 'refunded' | 'cancelled' | 'hold';
 
 export interface ISaleItem {
@@ -115,7 +115,7 @@ const saleSchema = new Schema<ISale>(
     dueAmount: { type: Number, required: true, default: 0, min: 0 },
     paymentMethod: {
       type: String,
-      enum: ['cash', 'card', 'upi', 'credit', 'mixed'],
+      enum: ['cash', 'card', 'upi', 'credit', 'mixed', 'split'],
       required: true,
     },
     status: {

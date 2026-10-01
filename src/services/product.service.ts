@@ -65,8 +65,22 @@ export class ProductService {
     if (data.name) {
       data.slug = data.name.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, '');
     }
+
+    if (data.cost_price !== undefined && data.costPrice === undefined) {
+      data.costPrice = Number(data.cost_price);
+    }
+
     const product = await Product.findByIdAndUpdate(id, data, { new: true, runValidators: true }).exec();
     if (!product) throw new AppError('Product not found', 404);
+
+    if (data.costPrice !== undefined && (!data.variants || !data.variants.length)) {
+      const targetCost = Math.max(0, Number(data.costPrice));
+      await Product.updateOne(
+        { _id: product._id },
+        { $set: { 'variants.$[].costPrice': targetCost, updatedAt: new Date() } }
+      ).exec();
+    }
+
     return product;
   }
 
