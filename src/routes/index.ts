@@ -6,6 +6,7 @@ import transactionRouter from './transaction.routes';
 import settingsRouter from './settings.routes';
 import notificationRouter from './notification.routes';
 import auditLogRouter from './auditLog.routes';
+import ledgerRouter from './ledger.routes';
 
 export const registerRoutes = (app: Application, prefix: string): void => {
   // Auth (no prefix duplication — auth router internally maps /login, /register etc.)
@@ -28,4 +29,7 @@ export const registerRoutes = (app: Application, prefix: string): void => {
 
   // Audit Logs
   app.use(prefix, auditLogRouter);
+
+  // Closing Ledger — Daily Settlements & Cash Draws
+  app.use(prefix, ledgerRouter);
 };
