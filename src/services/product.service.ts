@@ -49,9 +49,37 @@ export class ProductService {
     return product;
   }
 
-  async getByBarcode(barcode: string) {
-    const product = await Product.findOne({ barcode }).exec();
-    if (!product) throw new AppError('Product not found', 404);
+  async getByBarcode(barcodeRaw: string) {
+    const code = (barcodeRaw || '').trim();
+    if (!code) throw new AppError('Barcode is required', 400);
+
+    const clean = code.replace(/[^a-zA-Z0-9\-_]/g, '');
+    const cleanNoLeadingZeros = code.replace(/^0+/, '');
+
+    const candidates = Array.from(new Set([code, clean, cleanNoLeadingZeros].filter(Boolean)));
+    const regexes = candidates.map((c) => new RegExp('^' + c.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&') + '$', 'i'));
+
+    const query = {
+      $or: [
+        { barcode: { $in: candidates } },
+        { sku: { $in: candidates } },
+        { 'variants.barcode': { $in: candidates } },
+        { 'variants.sku': { $in: candidates } },
+        { barcode: { $in: regexes } },
+        { sku: { $in: regexes } },
+        { 'variants.barcode': { $in: regexes } },
+        { 'variants.sku': { $in: regexes } },
+      ],
+    };
+
+    const product = await Product.findOne(query)
+      .populate('categoryId', 'name')
+      .populate('brandId', 'name')
+      .populate('supplierId', 'name phone')
+      .lean()
+      .exec();
+
+    if (!product) throw new AppError('Product with barcode/SKU "' + code + '" not found', 404);
     return product;
   }
 
