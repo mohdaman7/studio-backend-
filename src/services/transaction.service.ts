@@ -710,9 +710,12 @@ export class TransactionService {
         branchId: purchase.branchId,
         title: `Supplier Payment - ${supplierName} (${purchase.purchaseNumber})`,
         amount: actualPay,
-        category: 'inventory',
+        category: 'cat purchase stock',
         date: new Date(),
         paymentMethod: paymentMethod || 'cash',
+        supplierId: purchase.supplierId || undefined,
+        purchaseId: purchase._id,
+        isSupplierPayout: true,
         notes: note ? `Payment towards ${purchase.purchaseNumber}: ${note}` : `Supplier payout for ${purchase.purchaseNumber}`,
         createdBy: userId,
       });
@@ -762,8 +765,31 @@ export class TransactionService {
       remainingPayment -= payTowardsThis;
     }
 
+    const settledTotal = paymentAmt - remainingPayment;
+    if (settledTotal > 0) {
+      try {
+        const supp = await Supplier.findById(supplierId).select('name').lean();
+        const supplierName = supp?.name || 'Supplier';
+        const userId = (req.user as any)?.userId || (req.user as any)?.id || (req.user as any)?._id;
+        await Expense.create({
+          companyId: companyId ? new mongoose.Types.ObjectId(companyId) : undefined,
+          title: `Supplier Dues Settlement - ${supplierName}`,
+          amount: settledTotal,
+          category: 'cat purchase stock',
+          date: new Date(),
+          paymentMethod: paymentMethod || 'cash',
+          supplierId: new mongoose.Types.ObjectId(String(supplierId)),
+          isSupplierPayout: true,
+          notes: note ? `Dues settlement: ${note}` : `Supplier balance payout for ${supplierName}`,
+          createdBy: userId,
+        });
+      } catch (expErr) {
+        console.warn('Could not auto-create expense for supplier settlement:', expErr);
+      }
+    }
+
     return {
-      totalPaid: paymentAmt - remainingPayment,
+      totalPaid: settledTotal,
       settledPurchasesCount: updatedPurchases.length,
       updatedPurchases,
     };
@@ -963,6 +989,8 @@ export class TransactionService {
         .skip(skip)
         .limit(limit)
         .populate('createdBy', 'name')
+        .populate('supplierId', 'name phone')
+        .populate('purchaseId', 'purchaseNumber grandTotal dueAmount')
         .lean()
         .exec(),
       Expense.countDocuments(filter).exec(),
@@ -972,7 +1000,7 @@ export class TransactionService {
   }
 
   async createExpense(input: any, userId: string) {
-    return Expense.create({
+    const expense = await Expense.create({
       companyId: input.companyId,
       branchId: input.branchId,
       title: input.title,
@@ -981,8 +1009,51 @@ export class TransactionService {
       date: input.date ? new Date(input.date) : new Date(),
       notes: input.notes,
       paymentMethod: input.paymentMethod || 'cash',
+      supplierId: input.supplierId ? new mongoose.Types.ObjectId(String(input.supplierId)) : undefined,
+      purchaseId: input.purchaseId ? new mongoose.Types.ObjectId(String(input.purchaseId)) : undefined,
+      isSupplierPayout: Boolean(input.isSupplierPayout || input.supplierId || input.purchaseId),
       createdBy: userId,
     });
+
+    // Auto-settle supplier due if supplierId or purchaseId was provided
+    try {
+      const payAmt = Number(input.amount);
+      if (payAmt > 0) {
+        if (input.purchaseId) {
+          const purchase = await Purchase.findById(input.purchaseId);
+          if (purchase && purchase.dueAmount > 0) {
+            const actualPay = Math.min(payAmt, purchase.dueAmount);
+            purchase.paidAmount += actualPay;
+            purchase.dueAmount = Math.max(0, purchase.dueAmount - actualPay);
+            const logNote = `Settled via Shop Expense: ${input.notes || input.title}`;
+            purchase.notes = purchase.notes ? `${purchase.notes} | ${logNote}` : logNote;
+            await purchase.save();
+          }
+        } else if (input.supplierId) {
+          const filter = {
+            supplierId: new mongoose.Types.ObjectId(String(input.supplierId)),
+            dueAmount: { $gt: 0 },
+          };
+          if (input.companyId) filter.companyId = new mongoose.Types.ObjectId(String(input.companyId));
+          const pendingPurchases = await Purchase.find(filter).sort({ purchaseDate: 1 });
+          let remainingPayment = payAmt;
+          for (const purchase of pendingPurchases) {
+            if (remainingPayment <= 0) break;
+            const payTowardsThis = Math.min(remainingPayment, purchase.dueAmount);
+            purchase.paidAmount += payTowardsThis;
+            purchase.dueAmount = Math.max(0, purchase.dueAmount - payTowardsThis);
+            const logNote = `Settled via Shop Expense: ${input.notes || input.title}`;
+            purchase.notes = purchase.notes ? `${purchase.notes} | ${logNote}` : logNote;
+            await purchase.save();
+            remainingPayment -= payTowardsThis;
+          }
+        }
+      }
+    } catch (settleErr) {
+      console.warn('Could not auto-settle supplier dues during createExpense:', settleErr);
+    }
+
+    return expense;
   }
 
   async deleteExpense(id: string, userId: string) {

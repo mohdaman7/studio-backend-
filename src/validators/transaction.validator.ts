@@ -106,6 +106,9 @@ export const createExpenseSchema = z.object({
   date: z.string().optional(),
   notes: z.string().optional(),
   paymentMethod: z.string().default('cash'),
+  supplierId: z.string().optional().nullable(),
+  purchaseId: z.string().optional().nullable(),
+  isSupplierPayout: z.boolean().optional(),
 });
 
 export const creditPaymentSchema = z.object({
