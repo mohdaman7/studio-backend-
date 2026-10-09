@@ -1030,7 +1030,7 @@ export class TransactionService {
             await purchase.save();
           }
         } else if (input.supplierId) {
-          const filter = {
+          const filter: any = {
             supplierId: new mongoose.Types.ObjectId(String(input.supplierId)),
             dueAmount: { $gt: 0 },
           };
